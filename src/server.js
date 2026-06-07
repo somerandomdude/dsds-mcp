@@ -61,6 +61,9 @@ function validateArgs(toolDef, args) {
     if (prop.type === 'array' && !Array.isArray(value)) {
       return `Argument "${field}" must be an array, got ${typeof value}`;
     }
+    if (prop.enum && !prop.enum.includes(value)) {
+      return `Argument "${field}" must be one of: ${prop.enum.join(', ')}`;
+    }
   }
 
   return null;
