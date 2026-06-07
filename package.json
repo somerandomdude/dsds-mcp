@@ -1,0 +1,38 @@
+{
+  "name": "dsds-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for the Design System Documentation Spec (DSDS)",
+  "type": "module",
+  "bin": {
+    "dsds-mcp": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "node src/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "update-schema": "node scripts/update-schema.js"
+  },
+  "keywords": [
+    "mcp",
+    "design-system",
+    "dsds",
+    "design-tokens",
+    "documentation"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

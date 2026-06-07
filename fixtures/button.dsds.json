@@ -1,0 +1,67 @@
+{
+  "$schema": "https://designsystemdocspec.org/v0.2.1/dsds.bundled.schema.json",
+  "dsdsVersion": "0.2.1",
+  "entity": {
+    "kind": "component",
+    "identifier": "button",
+    "name": "Button",
+    "metadata": {
+      "description": "Triggers an action or event when activated.",
+      "summary": "Triggers an action or event.",
+      "status": "stable",
+      "tags": ["action", "interactive"],
+      "since": "1.0.0"
+    },
+    "documentBlocks": [
+      {
+        "type": "purpose",
+        "useCases": [
+          {
+            "title": "Form submission",
+            "description": "Use to submit data in a form."
+          }
+        ]
+      },
+      {
+        "type": "api",
+        "properties": [
+          {
+            "name": "disabled",
+            "type": "boolean",
+            "default": false,
+            "description": "Prevents interaction when true."
+          },
+          {
+            "name": "variant",
+            "type": "string",
+            "default": "primary",
+            "description": "Visual emphasis level: primary, secondary, or ghost."
+          }
+        ]
+      },
+      {
+        "type": "accessibility",
+        "notes": "Must have a visible focus indicator. Use aria-disabled instead of the disabled attribute when the button should remain focusable."
+      }
+    ],
+    "agents": {
+      "constraints": [
+        { "level": "must", "rule": "Always provide a visible text label or aria-label." },
+        { "level": "must-not", "rule": "Do not use for navigation — use a link element instead." },
+        { "level": "should", "rule": "Pair a disabled button with a tooltip or inline explanation of why it is disabled." }
+      ],
+      "disambiguation": "Use Button for actions that change state or submit data. Use Link for navigation. Use IconButton when label space is unavailable.",
+      "antiPatterns": [
+        {
+          "pattern": "Setting disabled=true without explanation",
+          "correction": "Always pair a disabled Button with a tooltip or visible explanation so users understand why the action is unavailable."
+        },
+        {
+          "pattern": "Using a Button to navigate to another page",
+          "correction": "Use a Link component or an anchor element for navigation. Buttons are for actions, not navigation."
+        }
+      ],
+      "keywords": ["button", "cta", "call to action", "action", "submit", "click", "press", "trigger", "interactive"]
+    }
+  }
+}

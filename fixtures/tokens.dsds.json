@@ -1,0 +1,48 @@
+{
+  "$schema": "https://designsystemdocspec.org/v0.2.1/dsds.bundled.schema.json",
+  "dsdsVersion": "0.2.1",
+  "documentation": [
+    {
+      "name": "Color tokens",
+      "tokens": [
+        {
+          "kind": "token",
+          "identifier": "color-text-primary",
+          "tokenType": "color",
+          "metadata": {
+            "description": "Primary text color. Use for body copy and headings.",
+            "summary": "Primary text color.",
+            "status": "stable",
+            "tags": ["color", "text"]
+          }
+        },
+        {
+          "kind": "token",
+          "identifier": "color-text-secondary",
+          "tokenType": "color",
+          "metadata": {
+            "description": "Secondary text color. Use for supporting copy and labels.",
+            "summary": "Secondary text color.",
+            "status": "stable",
+            "tags": ["color", "text"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Deprecated tokens",
+      "tokens": [
+        {
+          "kind": "token",
+          "identifier": "color-grey-100",
+          "tokenType": "color",
+          "metadata": {
+            "description": "Legacy grey value. Replaced by semantic tokens.",
+            "status": "deprecated",
+            "tags": ["color", "legacy"]
+          }
+        }
+      ]
+    }
+  ]
+}
