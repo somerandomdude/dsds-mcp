@@ -123,11 +123,12 @@ Identify which entity kind matches what you are documenting:
 | Kind | Use when... |
 |------|-------------|
 | \`component\` | A reusable UI element (Button, Modal, Input, Card) |
+| \`guide\` | Long-form documentation: getting-started, tutorials, concepts, contribution docs |
+| \`pattern\` | A multi-component solution for a user need (empty state, error messaging) |
+| \`foundation\` | A visual domain with rules and a scale (color system, type scale, spacing, motion) |
+| \`theme\` | A set of token overrides for a specific context (dark, high-contrast) |
 | \`token\` | An individual design value (a color, a spacing step, a duration) |
 | \`token-group\` | A named collection of related tokens (color-text, spacing-scale) |
-| \`theme\` | A set of token overrides for a specific context (dark, high-contrast) |
-| \`style\` | A visual domain with rules and a scale (color system, type scale, spacing) |
-| \`pattern\` | A multi-component solution for a user need (empty state, error messaging) |
 
 Call \`dsds_spec_entity_schema(kind)\` to see every field available for your
 chosen kind, which are required, and what metadata you can provide.

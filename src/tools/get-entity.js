@@ -67,7 +67,7 @@ export async function getEntityHandler({ identifier }, getSystems, getSummaries)
   if (found.documentBlocks?.length) {
     lines.push(`## Documentation (${found.documentBlocks.length} block${found.documentBlocks.length !== 1 ? 's' : ''})`, '');
     for (const block of found.documentBlocks) {
-      lines.push(`### ${block.type}`, '', '```json', JSON.stringify(block, null, 2), '```', '');
+      lines.push(`### ${block.kind}`, '', '```json', JSON.stringify(block, null, 2), '```', '');
     }
   } else {
     lines.push('*No document blocks defined for this entity.*');

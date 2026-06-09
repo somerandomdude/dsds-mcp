@@ -73,15 +73,27 @@ export async function getAgentContextHandler({ identifier }, getSystems) {
     return { content: [{ type: 'text', text: lines.join('\n') }] };
   }
 
-  const { constraints = [], disambiguation, antiPatterns = [], keywords = [] } = found.agents;
+  const { intent, constraints = [], disambiguation, antiPatterns = [], keywords = [] } = found.agents;
 
   const lines = [
     `# ${found.name ?? found.identifier} — Agent Context`,
     '',
   ];
 
+  if (intent) {
+    lines.push('## Intent', '', intent, '');
+  }
+
   if (disambiguation) {
-    lines.push('## Disambiguation', '', disambiguation, '');
+    lines.push('## Disambiguation', '');
+    if (Array.isArray(disambiguation)) {
+      for (const d of disambiguation) {
+        lines.push(`**vs ${d.entity}:** ${d.distinction}`);
+      }
+    } else {
+      lines.push(disambiguation);
+    }
+    lines.push('');
   }
 
   if (constraints.length > 0) {
@@ -101,8 +113,10 @@ export async function getAgentContextHandler({ identifier }, getSystems) {
   if (antiPatterns.length > 0) {
     lines.push('## Anti-patterns', '');
     for (const ap of antiPatterns) {
-      lines.push(`**Avoid:** ${ap.pattern}`);
-      lines.push(`**Instead:** ${ap.correction}`);
+      const avoid = ap.description ?? ap.pattern ?? '';
+      const instead = ap.instead ?? ap.correction ?? '';
+      lines.push(`**Avoid:** ${avoid}`);
+      if (instead) lines.push(`**Instead:** ${instead}`);
       lines.push('');
     }
   }

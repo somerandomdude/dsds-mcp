@@ -46,10 +46,10 @@ export async function getDocumentBlockHandler({ identifier, blockType }, getSyst
     };
   }
 
-  const block = found.documentBlocks?.find(b => b.type === blockType);
+  const block = found.documentBlocks?.find(b => b.kind === blockType);
 
   if (!block) {
-    const available = (found.documentBlocks ?? []).map(b => `\`${b.type}\``).join(', ');
+    const available = (found.documentBlocks ?? []).map(b => `\`${b.kind}\``).join(', ');
     const msg = available
       ? `Entity "${found.identifier}" has no "${blockType}" block. Available blocks: ${available}`
       : `Entity "${found.identifier}" has no document blocks defined.`;

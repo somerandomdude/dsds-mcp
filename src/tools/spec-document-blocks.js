@@ -59,21 +59,23 @@ export async function specDocumentBlocksHandler({ kind }) {
 
 function exampleBlock(type) {
   const examples = {
-    guideline: { type: 'guideline', guidelines: [{ description: 'Rule text here.', enforcement: 'must' }] },
-    purpose: { type: 'purpose', useCases: [{ title: 'When to use', description: 'Use this when...' }] },
-    accessibility: { type: 'accessibility', wcagLevel: 'AA', notes: 'Keyboard and screen reader notes here.' },
-    content: { type: 'content', notes: 'Copywriting and localization rules here.' },
-    anatomy: { type: 'anatomy', parts: [{ name: 'container', description: 'The root element.' }] },
-    api: { type: 'api', properties: [{ name: 'disabled', type: 'boolean', description: 'Disables interaction.' }] },
-    variants: { type: 'variants', variants: [{ name: 'emphasis', values: ['primary', 'secondary', 'ghost'] }] },
-    states: { type: 'states', states: [{ name: 'disabled', description: 'Non-interactive state.' }] },
-    events: { type: 'events', events: [{ name: 'click', description: 'Fired when activated.' }] },
-    'design-specifications': { type: 'design-specifications', specifications: [] },
-    import: { type: 'import', imports: [{ platform: 'react', snippet: "import { MyComponent } from '@ds/components';" }] },
-    interactions: { type: 'interactions', interactions: [{ title: 'Step 1', description: 'User action.' }] },
-    principles: { type: 'principles', principles: [{ title: 'Principle name', description: 'Rationale.' }] },
-    scale: { type: 'scale', steps: [{ name: 'sm', value: '4px' }] },
-    motion: { type: 'motion', entries: [{ name: 'ease-in', duration: '150ms', easing: 'ease-in' }] },
+    section: { kind: 'section', items: [{ title: 'Section title', body: 'Section body in markdown.' }] },
+    steps: { kind: 'steps', title: 'How to…', ordered: true, items: [{ title: 'First step', instruction: 'What to do.' }] },
+    guideline: { kind: 'guideline', items: [{ guidance: 'Rule text here.', level: 'MUST' }, { guidance: 'Recommendation text here.', level: 'SHOULD', rationale: 'Why this matters.' }] },
+    purpose: { kind: 'purpose', useCases: [{ description: 'Use this when…', stance: 'recommended' }, { description: 'Do not use when…', stance: 'discouraged', alternative: { identifier: 'other-component', rationale: 'Why the alternative fits better.' } }] },
+    accessibility: { kind: 'accessibility', wcagLevel: 'AA', notes: 'Keyboard and screen reader notes here.' },
+    content: { kind: 'content', notes: 'Copywriting and localization rules here.' },
+    anatomy: { kind: 'anatomy', parts: [{ name: 'container', description: 'The root element.' }] },
+    api: { kind: 'api', properties: [{ name: 'disabled', type: 'boolean', description: 'Disables interaction.' }] },
+    variants: { kind: 'variants', variants: [{ name: 'emphasis', values: ['primary', 'secondary', 'ghost'] }] },
+    states: { kind: 'states', states: [{ name: 'disabled', description: 'Non-interactive state.' }] },
+    events: { kind: 'events', events: [{ name: 'click', description: 'Fired when activated.' }] },
+    'design-specifications': { kind: 'design-specifications', specifications: [] },
+    import: { kind: 'import', imports: [{ platform: 'react', snippet: "import { MyComponent } from '@ds/components';" }] },
+    interactions: { kind: 'interactions', interactions: [{ title: 'Step 1', description: 'User action.' }] },
+    principles: { kind: 'principles', principles: [{ title: 'Principle name', description: 'Rationale.' }] },
+    scale: { kind: 'scale', steps: [{ name: 'sm', value: '4px' }] },
+    motion: { kind: 'motion', entries: [{ name: 'ease-in', duration: '150ms', easing: 'ease-in' }] },
   };
-  return examples[type] ?? { type };
+  return examples[type] ?? { kind: type };
 }

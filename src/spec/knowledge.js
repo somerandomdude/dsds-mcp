@@ -1,7 +1,7 @@
-// Static spec knowledge derived from the DSDS 0.2.1 schema.
+// Static spec knowledge derived from the DSDS 0.5.1 schema.
 // Used by spec tools to describe entities and document blocks without parsing the full schema at runtime.
 
-export const ENTITY_KINDS = ['component', 'pattern', 'style', 'theme', 'token', 'token-group'];
+export const ENTITY_KINDS = ['component', 'guide', 'pattern', 'foundation', 'theme', 'token', 'token-group'];
 
 export const ENTITY_DESCRIPTIONS = {
   component: {
@@ -10,17 +10,23 @@ export const ENTITY_DESCRIPTIONS = {
     optionalTop: ['metadata', 'documentBlocks', 'agents', '$extensions'],
     notes: 'The workhorse entity. Use documentBlocks to document anatomy, API, variants, states, accessibility, etc.',
   },
+  guide: {
+    summary: 'Long-form, reading-oriented documentation: getting-started guides, tutorials, conceptual overviews, migration guides, and contribution docs.',
+    required: ['kind', 'identifier', 'name'],
+    optionalTop: ['metadata', 'documentBlocks', 'agents', '$extensions'],
+    notes: 'Use section and steps blocks for narrative and procedural content. Guide category values: getting-started, tutorial, concept, migration, contribution.',
+  },
   pattern: {
     summary: 'A multi-component solution for a recurring user need (e.g. Error Messaging, Empty State).',
     required: ['kind', 'identifier', 'name'],
     optionalTop: ['metadata', 'documentBlocks', 'agents', '$extensions'],
     notes: 'Patterns describe composition and interaction flows across components, not individual component behavior.',
   },
-  style: {
+  foundation: {
     summary: 'A macro-level visual domain such as color, typography, spacing, or motion.',
     required: ['kind', 'identifier', 'name'],
     optionalTop: ['metadata', 'documentBlocks', 'agents', '$extensions'],
-    notes: 'Use scale and principles blocks to document the rules and values that govern the style domain.',
+    notes: 'Use scale and principles blocks to document the rules and values that govern the foundation domain. Use section blocks for free-form narrative prose — overviews, rationale, FAQs — that structured block kinds do not capture.',
   },
   theme: {
     summary: 'A named set of token overrides for a specific context (e.g. dark mode, high-contrast, brand variant).',
@@ -43,21 +49,29 @@ export const ENTITY_DESCRIPTIONS = {
 };
 
 export const DOCUMENT_BLOCK_DESCRIPTIONS = {
+  section: {
+    summary: 'Narrative prose organized into titled, optionally nested sections. Each section has a title, body (markdown), optional examples, and optional nested sections. Use for free-form content the structured block kinds do not capture — overviews, rationale, background, decision history, FAQs.',
+    validFor: ['component', 'guide', 'pattern', 'foundation', 'theme', 'token', 'token-group'],
+  },
+  steps: {
+    summary: 'An ordered or unordered procedure. Each step has a title, optional instruction, optional expected result, and an optional flag.',
+    validFor: ['guide'],
+  },
   guideline: {
-    summary: 'Actionable design or usage rules with an enforcement level (must, should, avoid, never).',
-    validFor: ['component', 'pattern', 'style', 'theme', 'token', 'token-group'],
+    summary: 'Actionable usage rules. Each item has `guidance` (the rule text) and `level` (RFC 2119: MUST, MUST_NOT, SHOULD, SHOULD_NOT). Optional: `rationale`, `category`, `target`, `criteria`, `tags`, `examples`.',
+    validFor: ['component', 'guide', 'pattern', 'foundation', 'theme', 'token', 'token-group'],
   },
   purpose: {
-    summary: 'When-to-use and when-not-to-use scenarios for the entity.',
-    validFor: ['component', 'pattern', 'style', 'theme', 'token', 'token-group'],
+    summary: 'When-to-use and when-not-to-use scenarios. Each useCase has a `stance` ("recommended" or "discouraged") and an optional `alternative: { identifier, rationale }` for discouraged cases.',
+    validFor: ['component', 'guide', 'pattern', 'foundation', 'theme', 'token', 'token-group'],
   },
   accessibility: {
     summary: 'WCAG compliance notes, keyboard behavior, ARIA attributes, and contrast ratios.',
-    validFor: ['component', 'pattern', 'style', 'theme', 'token', 'token-group'],
+    validFor: ['component', 'guide', 'pattern', 'foundation', 'theme', 'token', 'token-group'],
   },
   content: {
     summary: 'Copywriting rules, localization guidance, and label conventions.',
-    validFor: ['component', 'pattern', 'style', 'theme', 'token', 'token-group'],
+    validFor: ['component', 'guide', 'pattern', 'foundation', 'theme', 'token', 'token-group'],
   },
   anatomy: {
     summary: 'Named structural parts of the entity and their token mappings.',
@@ -85,31 +99,32 @@ export const DOCUMENT_BLOCK_DESCRIPTIONS = {
   },
   import: {
     summary: 'Package import paths and framework-specific usage snippets.',
-    validFor: ['component'],
+    validFor: ['component', 'guide'],
   },
   interactions: {
     summary: 'Step-by-step interaction flows describing how a user moves through the pattern.',
     validFor: ['pattern'],
   },
   principles: {
-    summary: 'High-level rationale and rules governing the style domain.',
-    validFor: ['style'],
+    summary: 'High-level rationale and rules governing the foundation domain.',
+    validFor: ['foundation'],
   },
   scale: {
     summary: 'The discrete steps in a scale system (spacing scale, type scale, etc.).',
-    validFor: ['style'],
+    validFor: ['foundation'],
   },
   motion: {
-    summary: 'Duration and easing curves that govern animation within this style domain.',
-    validFor: ['style'],
+    summary: 'Duration and easing curves that govern animation within this foundation domain.',
+    validFor: ['foundation'],
   },
 };
 
 // Which block types are valid per entity kind
 export const VALID_BLOCKS_BY_KIND = {
   component: ['import', 'anatomy', 'api', 'events', 'variants', 'states', 'design-specifications', 'guideline', 'purpose', 'accessibility', 'content'],
-  pattern: ['interactions', 'anatomy', 'variants', 'states', 'events', 'guideline', 'purpose', 'accessibility', 'content'],
-  style: ['principles', 'scale', 'motion', 'guideline', 'purpose', 'accessibility', 'content'],
+  guide: ['section', 'steps', 'import', 'guideline', 'purpose', 'accessibility', 'content'],
+  pattern: ['interactions', 'anatomy', 'variants', 'states', 'events', 'guideline', 'purpose', 'accessibility', 'content', 'section'],
+  foundation: ['principles', 'scale', 'motion', 'guideline', 'purpose', 'accessibility', 'content', 'section'],
   theme: ['guideline', 'purpose', 'accessibility', 'content'],
   token: ['guideline', 'purpose', 'accessibility', 'content'],
   'token-group': ['guideline', 'purpose', 'accessibility', 'content'],
@@ -118,117 +133,142 @@ export const VALID_BLOCKS_BY_KIND = {
 export const METADATA_FIELDS = {
   description: 'Full description of the entity. Accepts a string (markdown) or { value, format } object.',
   summary: 'One-sentence summary shown in listings and search results.',
-  status: '"draft" | "experimental" | "stable" | "deprecated". Can also be an object with per-platform values.',
+  status: '"draft" | "experimental" | "stable" | "deprecated". Can also be an object: { overall, platforms: { react: { status, since }, ... } }.',
   tags: 'Array of strings for categorization and search filtering.',
   category: 'Grouping category within the design system.',
   since: 'Version string when this entity was introduced.',
+  'last-updated': 'Modification timestamp with optional change notes.',
   aliases: 'Alternative names or identifiers for this entity.',
-  preview: 'URL or path to a preview image or live demo.',
+  preview: 'Visual or interactive preview: image, video, code snippet, or URL.',
   thumbnail: 'URL or path to a thumbnail image.',
-  links: 'Array of typed links: { kind, url, label }. Kinds: source, design, documentation, parent, child, related.',
+  extends: 'Inheritance declaration from a base entity in a parent system: { identifier, system?, modifications? }.',
+  links: 'Typed links to external resources or internal artifacts: { kind, url?, identifier?, label?, role?, required? }. External kinds: source, design, storybook, documentation, package, repository. Relationship kinds: alternative, parent, child, related. Artifact kinds: component, token, token-group, foundation, pattern, theme.',
 };
 
 // Minimal scaffolds per entity kind
 export const SCAFFOLDS = {
   component: {
-    $schema: 'https://designsystemdocspec.org/v0.2.1/dsds.bundled.schema.json',
-    dsdsVersion: '0.2.1',
+    $schema: 'https://designsystemdocspec.org/v0.5.1/dsds.bundled.schema.json',
+    dsdsVersion: '0.5.1',
     entity: {
       kind: 'component',
       identifier: 'my-component',
       name: 'My Component',
-      metadata: {
-        description: 'Describe what this component does and when to use it.',
-        status: 'stable',
-        tags: [],
-      },
+      metadata: [
+        { kind: 'description', value: 'Describe what this component does and when to use it.' },
+        { kind: 'status', status: 'stable' },
+        { kind: 'tags', items: [] },
+      ],
+      documentBlocks: [],
+    },
+  },
+  guide: {
+    $schema: 'https://designsystemdocspec.org/v0.5.1/dsds.bundled.schema.json',
+    dsdsVersion: '0.5.1',
+    entity: {
+      kind: 'guide',
+      identifier: 'my-guide',
+      name: 'My Guide',
+      metadata: [
+        { kind: 'description', value: 'Describe what this guide covers.' },
+        { kind: 'category', value: 'concept' },
+        { kind: 'status', status: 'stable' },
+      ],
       documentBlocks: [],
     },
   },
   pattern: {
-    $schema: 'https://designsystemdocspec.org/v0.2.1/dsds.bundled.schema.json',
-    dsdsVersion: '0.2.1',
+    $schema: 'https://designsystemdocspec.org/v0.5.1/dsds.bundled.schema.json',
+    dsdsVersion: '0.5.1',
     entity: {
       kind: 'pattern',
       identifier: 'my-pattern',
       name: 'My Pattern',
-      metadata: {
-        description: 'Describe the user need this pattern addresses.',
-        status: 'stable',
-        tags: [],
-      },
+      metadata: [
+        { kind: 'description', value: 'Describe the user need this pattern addresses.' },
+        { kind: 'status', status: 'stable' },
+        { kind: 'tags', items: [] },
+      ],
       documentBlocks: [],
     },
   },
-  style: {
-    $schema: 'https://designsystemdocspec.org/v0.2.1/dsds.bundled.schema.json',
-    dsdsVersion: '0.2.1',
+  foundation: {
+    $schema: 'https://designsystemdocspec.org/v0.5.1/dsds.bundled.schema.json',
+    dsdsVersion: '0.5.1',
     entity: {
-      kind: 'style',
-      identifier: 'my-style',
-      name: 'My Style',
-      metadata: {
-        description: 'Describe the visual domain this style governs.',
-        status: 'stable',
-      },
+      kind: 'foundation',
+      identifier: 'my-foundation',
+      name: 'My Foundation',
+      metadata: [
+        { kind: 'description', value: 'Describe the visual domain this foundation governs.' },
+        { kind: 'status', status: 'stable' },
+      ],
       documentBlocks: [],
     },
   },
   theme: {
-    $schema: 'https://designsystemdocspec.org/v0.2.1/dsds.bundled.schema.json',
-    dsdsVersion: '0.2.1',
+    $schema: 'https://designsystemdocspec.org/v0.5.1/dsds.bundled.schema.json',
+    dsdsVersion: '0.5.1',
     entity: {
       kind: 'theme',
       identifier: 'my-theme',
       name: 'My Theme',
-      metadata: {
-        description: 'Describe the context or mode this theme is used for.',
-        status: 'stable',
-      },
+      metadata: [
+        { kind: 'description', value: 'Describe the context or mode this theme is used for.' },
+        { kind: 'status', status: 'stable' },
+      ],
       overrides: [],
       documentBlocks: [],
     },
   },
   token: {
-    $schema: 'https://designsystemdocspec.org/v0.2.1/dsds.bundled.schema.json',
-    dsdsVersion: '0.2.1',
+    $schema: 'https://designsystemdocspec.org/v0.5.1/dsds.bundled.schema.json',
+    dsdsVersion: '0.5.1',
     entity: {
       kind: 'token',
       identifier: 'color-text-primary',
       tokenType: 'color',
-      metadata: {
-        description: 'Describe what this token represents and when to use it.',
-        status: 'stable',
-      },
+      metadata: [
+        { kind: 'description', value: 'Describe what this token represents and when to use it.' },
+        { kind: 'status', status: 'stable' },
+      ],
       documentBlocks: [],
     },
   },
   'token-group': {
-    $schema: 'https://designsystemdocspec.org/v0.2.1/dsds.bundled.schema.json',
-    dsdsVersion: '0.2.1',
+    $schema: 'https://designsystemdocspec.org/v0.5.1/dsds.bundled.schema.json',
+    dsdsVersion: '0.5.1',
     entity: {
       kind: 'token-group',
       identifier: 'color-text',
-      metadata: {
-        description: 'Describe the collection of tokens in this group.',
-        status: 'stable',
-      },
+      metadata: [
+        { kind: 'description', value: 'Describe the collection of tokens in this group.' },
+        { kind: 'status', status: 'stable' },
+      ],
       children: [],
       documentBlocks: [],
     },
   },
   system: {
-    $schema: 'https://designsystemdocspec.org/v0.2.1/dsds.bundled.schema.json',
-    dsdsVersion: '0.2.1',
-    systemMetadata: {
-      name: 'My Design System',
-      version: '1.0.0',
+    $schema: 'https://designsystemdocspec.org/v0.5.1/dsds.bundled.schema.json',
+    dsdsVersion: '0.5.1',
+    systemInfo: {
+      systemName: 'My Design System',
+      systemVersion: '1.0.0',
       organization: 'My Organization',
     },
     documentation: [
       {
         name: 'Components',
         components: [],
+      },
+      {
+        name: 'Foundations',
+        foundations: [],
+      },
+      {
+        name: 'Guides',
+        guides: [],
       },
     ],
   },

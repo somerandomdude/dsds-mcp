@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadConfig } from './config.js';
-import { loadSystems, summarizeEntities } from './loader.js';
+import { loadSystems, summarizeEntities, loadIntroEntity } from './loader.js';
 import { createServer } from './server.js';
 import { startUpdateCheck } from './spec/version.js';
 import { startWatching } from './watcher.js';
@@ -9,7 +9,11 @@ import { startWatching } from './watcher.js';
 async function main() {
   const config = loadConfig();
 
-  const { systems, errors } = await loadSystems(config.paths);
+  const [{ systems, errors }, introEntity] = await Promise.all([
+    loadSystems(config.paths),
+    loadIntroEntity(config.introPath),
+  ]);
+
   for (const { path, error } of errors) {
     process.stderr.write(`[dsds-mcp] Failed to load ${path}: ${error}\n`);
   }
@@ -25,6 +29,7 @@ async function main() {
   const server = createServer(
     () => state.systems,
     () => state.summaries,
+    introEntity,
   );
 
   startWatching(config.paths, state);

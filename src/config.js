@@ -6,6 +6,7 @@ export function loadConfig() {
 
   return {
     paths,
-    schemaVersion: process.env['DSDS_SCHEMA_VERSION'] ?? '0.2.1',
+    introPath: process.env['DSDS_INTRO_PATH'] ?? null,
+    schemaVersion: process.env['DSDS_SCHEMA_VERSION'] ?? '0.5.1',
   };
 }

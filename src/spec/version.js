@@ -1,4 +1,4 @@
-export const BUNDLED_VERSION = '0.2.1';
+export const BUNDLED_VERSION = '0.5.1';
 export const SPEC_URL = 'https://designsystemdocspec.org';
 
 const GITHUB_TAGS_URL =
@@ -31,7 +31,7 @@ async function checkForUpdates() {
   const tags = await res.json();
   const versions = tags
     .map(t => t.name.replace(/^v/, ''))
-    .filter(v => /^\d+\.\d+\.\d+$/.test(v));
+    .filter(v => /^\d+(\.\d+){1,2}$/.test(v));
 
   if (versions.length === 0) return { latestVersion: null, isNewer: false };
 
@@ -40,11 +40,14 @@ async function checkForUpdates() {
 }
 
 function compareVersionsDesc(a, b) {
-  const [aMaj, aMin, aPat] = a.split('.').map(Number);
-  const [bMaj, bMin, bPat] = b.split('.').map(Number);
-  if (aMaj !== bMaj) return bMaj - aMaj;
-  if (aMin !== bMin) return bMin - aMin;
-  return bPat - aPat;
+  const ap = a.split('.').map(Number);
+  const bp = b.split('.').map(Number);
+  const len = Math.max(ap.length, bp.length);
+  for (let i = 0; i < len; i++) {
+    const diff = (bp[i] ?? 0) - (ap[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
 }
 
 function isNewer(latest, current) {

@@ -24,7 +24,7 @@ import { searchEntitiesDef, searchEntitiesHandler } from './tools/search-entitie
 import { getDocumentBlockDef, getDocumentBlockHandler } from './tools/get-document-block.js';
 import { getAgentContextDef, getAgentContextHandler } from './tools/get-agent-context.js';
 
-const INSTRUCTIONS = `
+const BASE_INSTRUCTIONS = `
 DSDS MCP — Design System Documentation Spec v${BUNDLED_VERSION}
 
 START HERE: Call dsds_context_brief first to get a full briefing before any work begins.
@@ -42,6 +42,81 @@ RESOURCES: Each design system entity is also available as a resource at dsds://e
 
 Note: If DSDS_PATHS is not set, design system tools will return setup instructions. Spec tools always work.
 `.trim();
+
+/**
+ * Renders a DSDS entity to a markdown string suitable for agent instructions.
+ * Handles section, steps, guideline, and purpose document blocks.
+ */
+function renderIntroEntity(entity) {
+  if (!entity) return null;
+
+  const lines = [];
+
+  const name = entity.name ?? entity.identifier;
+  lines.push(`---`, '', `## ${name}`, '');
+
+  if (Array.isArray(entity.metadata)) {
+    const desc = entity.metadata.find(m => m.kind === 'description');
+    if (desc?.value) lines.push(desc.value, '');
+  }
+
+  if (entity.agents?.intent) {
+    lines.push(entity.agents.intent, '');
+  }
+
+  for (const block of (entity.documentBlocks ?? [])) {
+    if (block.kind === 'section') {
+      for (const item of (block.items ?? [])) renderSectionItem(item, 3, lines);
+    } else if (block.kind === 'steps') {
+      if (block.title) lines.push(`### ${block.title}`, '');
+      const ordered = block.ordered !== false;
+      (block.items ?? []).forEach((step, i) => {
+        lines.push(`${ordered ? `${i + 1}.` : '-'} **${step.title}**`);
+        if (step.instruction) lines.push(`   ${step.instruction}`);
+      });
+      lines.push('');
+    } else if (block.kind === 'guideline') {
+      lines.push('### Guidelines', '');
+      for (const item of (block.items ?? [])) {
+        // 0.5+: item.level (MUST/MUST_NOT/SHOULD/SHOULD_NOT); fallback for pre-0.5 item.kind
+        const level = item.level ?? (item.kind === 'required' ? 'MUST' : item.kind === 'prohibited' ? 'MUST_NOT' : null);
+        const label = level === 'MUST' ? 'Must' : level === 'MUST_NOT' ? 'Must not' : level === 'SHOULD' ? 'Should' : level === 'SHOULD_NOT' ? 'Should not' : 'Note';
+        const rationale = item.rationale ? ` — ${item.rationale}` : '';
+        lines.push(`- **${label}:** ${item.guidance}${rationale}`);
+      }
+      lines.push('');
+    } else if (block.kind === 'purpose') {
+      const positive = (block.useCases ?? []).filter(u => u.stance === 'recommended' || u.kind === 'positive');
+      const negative = (block.useCases ?? []).filter(u => u.stance === 'discouraged' || u.kind === 'negative');
+      if (positive.length > 0) {
+        lines.push('### When to use', '');
+        for (const u of positive) lines.push(`- ${u.description}`);
+        lines.push('');
+      }
+      if (negative.length > 0) {
+        lines.push('### When not to use', '');
+        for (const u of negative) lines.push(`- ${u.description}`);
+        lines.push('');
+      }
+    }
+  }
+
+  if (Array.isArray(entity.agents?.constraints) && entity.agents.constraints.length > 0) {
+    lines.push('### Rules', '');
+    for (const c of entity.agents.constraints) {
+      lines.push(`- **${c.level.toUpperCase()}:** ${c.rule}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+function renderSectionItem(item, depth, lines) {
+  lines.push(`${'#'.repeat(depth)} ${item.title}`, '');
+  if (item.body) lines.push(item.body, '');
+  for (const sub of (item.sections ?? [])) renderSectionItem(sub, depth + 1, lines);
+}
 
 function validateArgs(toolDef, args) {
   const { required = [], properties = {} } = toolDef.inputSchema ?? {};
@@ -77,7 +152,12 @@ function promptMessage(text) {
   return { role: 'user', content: { type: 'text', text } };
 }
 
-export function createServer(getSystems, getSummaries) {
+export function createServer(getSystems, getSummaries, introEntity = null) {
+  const introText = renderIntroEntity(introEntity);
+  const INSTRUCTIONS = introText
+    ? `${BASE_INSTRUCTIONS}\n\n${introText}`
+    : BASE_INSTRUCTIONS;
+
   const server = new Server(
     { name: 'dsds-mcp', version: '0.1.0' },
     { capabilities: { tools: {}, prompts: {}, resources: {} }, instructions: INSTRUCTIONS }
@@ -147,6 +227,14 @@ export function createServer(getSystems, getSummaries) {
     },
   ];
 
+  if (introEntity) {
+    prompts.push({
+      name: 'dsds-intro',
+      description: `${introEntity.name ?? introEntity.identifier} — retrieve the design system introduction that was loaded on server start.`,
+      arguments: [],
+    });
+  }
+
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts }));
 
   server.setRequestHandler(GetPromptRequestSchema, async (request) => {
@@ -165,6 +253,11 @@ export function createServer(getSystems, getSummaries) {
       if (task) lines.push(`## Your task: ${task}`, '');
       lines.push(AUTHOR_BRIEF);
       return { messages: [promptMessage(lines.join('\n'))] };
+    }
+
+    if (name === 'dsds-intro') {
+      if (!introEntity) throw new Error('No intro entity configured. Set the DSDS_INTRO_PATH environment variable.');
+      return { messages: [promptMessage(renderIntroEntity(introEntity))] };
     }
 
     throw new Error(`Unknown prompt: "${name}"`);

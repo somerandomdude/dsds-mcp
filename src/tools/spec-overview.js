@@ -32,8 +32,14 @@ export async function specOverviewHandler() {
   lines.push('## Document Structure');
   lines.push('');
   lines.push('Every DSDS file needs:');
-  lines.push('- `dsdsVersion`: `"0.2.1"`');
+  lines.push(`- \`dsdsVersion\`: \`"${BUNDLED_VERSION}"\``);
   lines.push('- Either `entity` (single entity per file) or `documentation` (array of entity groups)');
+  lines.push('');
+  lines.push('Optional root-level properties:');
+  lines.push('- `systemInfo`: Identity and provenance — `systemName`, `systemVersion`, `organization`, `url`, `license`');
+  lines.push('- `purpose`: Design system intent — `description` and `useCases` array (stance: recommended/discouraged)');
+  lines.push('- `guidelines`: Cross-cutting rules that apply across the entire system (array of guidelineEntry with `guidance`, `level`, optional `rationale`, `category`, `target`, `tags`)');
+  lines.push('- `extends`: Declare inheritance from a parent design system — `system`, `url`, `version`, `description`');
   lines.push('');
   lines.push('Entities carry a `documentBlocks` array of typed content sections. Call `dsds_spec_document_blocks` with an entity kind to see which block types are available.');
   lines.push('');

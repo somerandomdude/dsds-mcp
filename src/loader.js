@@ -16,7 +16,7 @@ async function extractEntities(doc, baseDir, visited) {
       entities.push(...await resolveRef(group.$ref, baseDir, visited));
       continue;
     }
-    for (const key of ['components', 'patterns', 'styles', 'themes', 'tokens', 'tokenGroups']) {
+    for (const key of ['components', 'guides', 'patterns', 'foundations', 'themes', 'tokens', 'tokenGroups']) {
       if (Array.isArray(group[key])) entities.push(...group[key]);
     }
   }
@@ -65,6 +65,28 @@ function resolvePointer(doc, fragment) {
   return pointer.split('/').reduce((obj, key) => obj?.[key], doc);
 }
 
+/**
+ * Loads a single entity from a DSDS file for use as the intro entity.
+ * Supports single-entity docs ({ entity: {...} }) and bare entity objects.
+ */
+export async function loadIntroEntity(filePath) {
+  if (!filePath) return null;
+  try {
+    const absPath = resolve(filePath);
+    const raw = await readFile(absPath, 'utf-8');
+    const doc = JSON.parse(raw);
+    const entity = doc.entity ?? doc;
+    if (!entity?.kind || !entity?.identifier) {
+      process.stderr.write(`[dsds-mcp] Intro file at ${filePath} has no valid entity — skipping.\n`);
+      return null;
+    }
+    return entity;
+  } catch (err) {
+    process.stderr.write(`[dsds-mcp] Failed to load intro entity ${filePath}: ${err.message}\n`);
+    return null;
+  }
+}
+
 async function loadFile(filePath) {
   const absPath = resolve(filePath);
   const raw = await readFile(absPath, 'utf-8');
@@ -96,22 +118,39 @@ export function summarizeEntities(systems) {
       identifier: entity.identifier,
       name: entity.name ?? entity.identifier,
       kind: entity.kind,
-      status: resolveStatus(entity.metadata?.status),
-      summary: resolveText(entity.metadata?.summary),
-      tags: entity.metadata?.tags ?? [],
+      status: resolveMetaStatus(entity.metadata),
+      summary: resolveMetaSummary(entity.metadata),
+      tags: resolveMetaTags(entity.metadata),
       filePath: system.filePath,
     }))
   );
 }
 
-function resolveStatus(status) {
-  if (!status) return undefined;
-  if (typeof status === 'string') return status;
-  return status.value ?? undefined;
+// Handles both v0.2.2 array format and legacy object format
+function resolveMetaStatus(metadata) {
+  if (!metadata) return undefined;
+  if (Array.isArray(metadata)) {
+    return metadata.find(m => m.kind === 'status')?.status ?? undefined;
+  }
+  const s = metadata.status;
+  if (!s) return undefined;
+  return typeof s === 'string' ? s : s.value ?? undefined;
 }
 
-function resolveText(value) {
-  if (!value) return undefined;
-  if (typeof value === 'string') return value;
-  return value.value ?? undefined;
+function resolveMetaSummary(metadata) {
+  if (!metadata) return undefined;
+  if (Array.isArray(metadata)) {
+    return metadata.find(m => m.kind === 'summary')?.value ?? undefined;
+  }
+  const s = metadata.summary;
+  if (!s) return undefined;
+  return typeof s === 'string' ? s : s.value ?? undefined;
+}
+
+function resolveMetaTags(metadata) {
+  if (!metadata) return [];
+  if (Array.isArray(metadata)) {
+    return metadata.find(m => m.kind === 'tags')?.items ?? [];
+  }
+  return metadata.tags ?? [];
 }
