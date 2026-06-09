@@ -14,8 +14,19 @@ async function main() {
     loadIntroEntity(config.introPath),
   ]);
 
-  for (const { path, error } of errors) {
-    process.stderr.write(`[dsds-mcp] Failed to load ${path}: ${error}\n`);
+  // Startup diagnostics — always written to stderr so client logs show the state
+  if (config.paths.length === 0) {
+    process.stderr.write('[dsds-mcp] DSDS_PATHS not set — design system tools unavailable\n');
+  } else {
+    for (const system of systems) {
+      process.stderr.write(`[dsds-mcp] Loaded ${system.entities.length} entities from ${system.filePath}\n`);
+    }
+    for (const { path, error } of errors) {
+      process.stderr.write(`[dsds-mcp] Failed to load ${path}: ${error}\n`);
+    }
+    if (systems.length === 0) {
+      process.stderr.write('[dsds-mcp] All paths failed to load — check paths and file permissions\n');
+    }
   }
 
   startUpdateCheck();

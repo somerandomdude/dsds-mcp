@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { loadConfig } from '../src/config.js';
 
@@ -35,15 +36,27 @@ describe('loadConfig', () => {
     expect(config.paths).toEqual(['/a/b.json', '/c/d.json']);
   });
 
-  it('defaults schemaVersion to 0.2.1', () => {
+  it('defaults schemaVersion to 0.5.1', () => {
     delete process.env['DSDS_SCHEMA_VERSION'];
     const config = loadConfig();
-    expect(config.schemaVersion).toBe('0.2.1');
+    expect(config.schemaVersion).toBe('0.5.1');
   });
 
   it('uses DSDS_SCHEMA_VERSION when set', () => {
     process.env['DSDS_SCHEMA_VERSION'] = '0.3.0';
     const config = loadConfig();
     expect(config.schemaVersion).toBe('0.3.0');
+  });
+
+  it('expands ~ in DSDS_PATHS to the home directory', () => {
+    process.env['DSDS_PATHS'] = '~/Documents/design.dsds.json';
+    const config = loadConfig();
+    expect(config.paths).toEqual([`${homedir()}/Documents/design.dsds.json`]);
+  });
+
+  it('expands ~ in DSDS_PATHS with multiple paths', () => {
+    process.env['DSDS_PATHS'] = '~/a.dsds.json,/absolute/b.dsds.json';
+    const config = loadConfig();
+    expect(config.paths).toEqual([`${homedir()}/a.dsds.json`, '/absolute/b.dsds.json']);
   });
 });

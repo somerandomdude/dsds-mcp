@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { validateDocument, validateJsonString } from '../src/validator.js';
 
 const validButton = {
-  dsdsVersion: '0.2.1',
+  dsdsVersion: '0.5.1',
   entity: {
     kind: 'component',
     identifier: 'button',
@@ -24,7 +24,7 @@ describe('validateDocument', () => {
 
   it('returns errors when required entity field is missing', () => {
     const result = validateDocument({
-      dsdsVersion: '0.2.1',
+      dsdsVersion: '0.5.1',
       entity: { kind: 'component', identifier: 'x' }, // missing name
     });
     expect(result.valid).toBe(false);
@@ -32,7 +32,7 @@ describe('validateDocument', () => {
 
   it('returns errors for unknown entity kind', () => {
     const result = validateDocument({
-      dsdsVersion: '0.2.1',
+      dsdsVersion: '0.5.1',
       entity: { kind: 'widget', identifier: 'x', name: 'X' },
     });
     expect(result.valid).toBe(false);
@@ -40,7 +40,7 @@ describe('validateDocument', () => {
 
   it('validates a multi-entity document', () => {
     const result = validateDocument({
-      dsdsVersion: '0.2.1',
+      dsdsVersion: '0.5.1',
       documentation: [
         {
           name: 'Components',
