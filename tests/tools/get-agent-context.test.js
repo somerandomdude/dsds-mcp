@@ -13,9 +13,8 @@ describe('getAgentContextHandler', () => {
     const result = await getAgentContextHandler({ identifier: 'button' }, () => systems);
     const text = result.content[0].text;
     expect(text).toContain('Agent Context');
-    expect(text).toContain('Constraints');
-    expect(text).toContain('Anti-patterns');
-    expect(text).toContain('Keywords');
+    expect(text).toContain('Agent-only documentation');
+    expect(text).toContain('Rules');
     expect(result.isError).toBeFalsy();
   });
 
@@ -23,14 +22,14 @@ describe('getAgentContextHandler', () => {
     const { systems } = await loadSystems([`${fixturesDir}/button.dsds.json`]);
     const result = await getAgentContextHandler({ identifier: 'button' }, () => systems);
     expect(result.content[0].text).toContain('MUST');
-    expect(result.content[0].text).toContain('MUST-NOT');
+    expect(result.content[0].text).toContain('MUST_NOT');
   });
 
   it('returns a helpful message when no agents field is defined', async () => {
     const { systems } = await loadSystems([`${fixturesDir}/tokens.dsds.json`]);
     const result = await getAgentContextHandler({ identifier: 'color-text-primary' }, () => systems);
     expect(result.content[0].text).toContain('no agent context defined');
-    expect(result.content[0].text).toContain('constraints');
+    expect(result.content[0].text).toContain('agentDocumentBlocks');
     expect(result.isError).toBeFalsy();
   });
 

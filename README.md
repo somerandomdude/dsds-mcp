@@ -8,7 +8,7 @@ Two use cases:
 
 The DSDS spec is bundled at the version listed below. The server checks for updates on startup and surfaces a notice in tool responses when a newer version is available.
 
-**Bundled spec version:** 0.5.1
+**Bundled spec version:** 0.7
 
 ---
 
@@ -16,6 +16,7 @@ The DSDS spec is bundled at the version listed below. The server checks for upda
 
 - Node.js 18 or later
 - An MCP-compatible client
+- ESLint v9 or later (optional — only required if using `dsds_lint_code`)
 
 ---
 
@@ -65,7 +66,9 @@ Configuration is done via environment variables passed through your MCP client c
 |----------|----------|-------------|
 | `DSDS_PATHS` | No | Comma-separated paths to your DSDS file(s). Required for design system access tools. |
 | `DSDS_INTRO_PATH` | No | Path to a single DSDS file loaded as the design system introduction. Its content is prepended to the server instructions and exposed as a `dsds-intro` prompt. |
-| `DSDS_SCHEMA_VERSION` | No | Override the spec version string. Defaults to `0.5.1`. |
+| `DSDS_SCHEMA_VERSION` | No | Override the spec version string. Defaults to `0.7`. |
+| `LINT_PLUGINS` | No | Comma-separated ESLint plugin package names to use with `dsds_lint_code`. Plugins are resolved from `LINT_RESOLVE_DIR`. |
+| `LINT_RESOLVE_DIR` | No | Absolute path to the project where your ESLint plugins are installed. Defaults to the current working directory. |
 
 ### Pointing at your design system
 
@@ -112,6 +115,61 @@ Use this for a top-level system overview, a getting-started guide, or any entity
 
 `DSDS_INTRO_PATH` can point to any file already listed in `DSDS_PATHS`, or to a separate overview document not included in the main file set.
 
+### Linting code with ESLint plugins
+
+`dsds_lint_code` runs ESLint against a code snippet using any plugins installed in your project. This lets an agent validate component code against your design system's lint rules before finishing a task.
+
+**Prerequisites:**
+
+1. Install `eslint` (v9 or later) in your project:
+   ```bash
+   npm install -D eslint
+   ```
+2. Install the ESLint plugin(s) you want to run:
+   ```bash
+   npm install -D eslint-plugin-your-design-system
+   ```
+
+**Configuration:**
+
+```json
+{
+  "mcpServers": {
+    "dsds": {
+      "command": "npx",
+      "args": ["dsds-mcp"],
+      "env": {
+        "DSDS_PATHS": "/path/to/my-design-system.dsds.json",
+        "LINT_PLUGINS": "eslint-plugin-your-design-system",
+        "LINT_RESOLVE_DIR": "/path/to/your/project"
+      }
+    }
+  }
+}
+```
+
+Multiple plugins:
+
+```json
+"LINT_PLUGINS": "eslint-plugin-your-design-system,eslint-plugin-react"
+```
+
+`LINT_RESOLVE_DIR` must point to the directory where the plugins are installed (the one that contains `node_modules/`). It defaults to cwd if not set.
+
+**How the rules are chosen:**
+
+The MCP uses each plugin's `configs.recommended` ruleset if it exports one. If the plugin has no recommended config, all rules are enabled at `warn` level. No `eslint.config.js` from the filesystem is read — the MCP constructs the config purely from what's configured here.
+
+**Usage by an agent:**
+
+```
+dsds_lint_code(code="<jsx string>", filename="Component.tsx")
+```
+
+The `filename` parameter is used for parser inference (`.tsx` vs `.js`, etc.). It defaults to `Component.tsx`.
+
+---
+
 ### Where to put this config
 
 - **Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
@@ -157,25 +215,29 @@ These let agents query an existing DSDS document.
 dsds_context_brief(useCase="build") → dsds_list_entities → dsds_search_entities → dsds_get_agent_context or dsds_get_entity
 ```
 
+### Lint tools — require `LINT_PLUGINS`
+
+| Tool | Description |
+|------|-------------|
+| `dsds_lint_code` | Lint a code snippet using the configured ESLint plugins. Returns violations with rule ID, severity, line/column, and message. Accepts `code` (required) and `filename` (optional, defaults to `Component.tsx`). |
+
 ---
 
 ## DSDS file format
 
-DSDS files are JSON documents. Every file needs `dsdsVersion` and either an `entity` (single entity) or `documentation` array (multiple entities).
+DSDS files are JSON documents. Every file needs `dsdsVersion` and either an `entity` (single entity) or `entityGroups` array (named groups of entities).
 
 **Single entity:**
 ```json
 {
-  "$schema": "https://designsystemdocspec.org/v0.5.1/dsds.bundled.schema.json",
-  "dsdsVersion": "0.5.1",
+  "$schema": "https://designsystemdocspec.org/v0.7/dsds.bundled.schema.json",
+  "dsdsVersion": "0.7",
   "entity": {
     "kind": "component",
     "identifier": "button",
     "name": "Button",
-    "metadata": [
-      { "kind": "description", "value": "Triggers an action or event when activated." },
-      { "kind": "status", "status": "stable" }
-    ],
+    "description": "Triggers an action or event when activated.",
+    "metadata": { "status": "stable" },
     "documentBlocks": []
   }
 }
@@ -184,13 +246,13 @@ DSDS files are JSON documents. Every file needs `dsdsVersion` and either an `ent
 **Multi-entity:**
 ```json
 {
-  "$schema": "https://designsystemdocspec.org/v0.5.1/dsds.bundled.schema.json",
-  "dsdsVersion": "0.5.1",
+  "$schema": "https://designsystemdocspec.org/v0.7/dsds.bundled.schema.json",
+  "dsdsVersion": "0.7",
   "systemInfo": { "systemName": "My Design System" },
-  "documentation": [
+  "entityGroups": [
     {
-      "name": "Components",
-      "components": []
+      "name": "My Design System",
+      "entities": []
     }
   ]
 }

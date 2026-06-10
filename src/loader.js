@@ -8,14 +8,25 @@ import { resolve, dirname } from 'node:path';
  */
 async function extractEntities(doc, baseDir, visited) {
   if (doc.entity) return [doc.entity];
-  if (!Array.isArray(doc.documentation)) return [];
+  // v0.7 uses entityGroups; older documents used documentation
+  const groups = doc.entityGroups ?? doc.documentation;
+  if (!Array.isArray(groups)) return [];
 
   const entities = [];
-  for (const group of doc.documentation) {
+  for (const group of groups) {
     if (group.$ref) {
       entities.push(...await resolveRef(group.$ref, baseDir, visited));
       continue;
     }
+    // v0.7: one mixed entities array; each item may be an entity or a $ref
+    if (Array.isArray(group.entities)) {
+      for (const item of group.entities) {
+        if (item?.$ref) entities.push(...await resolveRef(item.$ref, baseDir, visited));
+        else if (item) entities.push(item);
+      }
+      continue;
+    }
+    // legacy (pre-0.7): per-kind typed arrays
     for (const key of ['components', 'guides', 'patterns', 'foundations', 'themes', 'tokens', 'tokenGroups']) {
       if (Array.isArray(group[key])) entities.push(...group[key]);
     }
@@ -95,6 +106,24 @@ async function loadFile(filePath) {
   return { filePath: absPath, document, entities };
 }
 
+export async function loadLintFiles(paths) {
+  const files = [];
+  const errors = [];
+  await Promise.all(paths.map(async p => {
+    try {
+      const absPath = resolve(p);
+      const raw = await readFile(absPath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      const rules = Array.isArray(parsed) ? parsed : (parsed.rules ?? []);
+      const meta = Array.isArray(parsed) ? {} : { name: parsed.name, version: parsed.version };
+      files.push({ filePath: absPath, meta, rules });
+    } catch (err) {
+      errors.push({ path: p, error: err.message });
+    }
+  }));
+  return { files, errors };
+}
+
 export async function loadSystems(paths) {
   const systems = [];
   const errors = [];
@@ -134,7 +163,7 @@ function resolveMetaStatus(metadata) {
   }
   const s = metadata.status;
   if (!s) return undefined;
-  return typeof s === 'string' ? s : s.value ?? undefined;
+  return typeof s === 'string' ? s : s.overall ?? s.value ?? undefined;
 }
 
 function resolveMetaSummary(metadata) {

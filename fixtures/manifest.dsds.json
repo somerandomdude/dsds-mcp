@@ -1,11 +1,15 @@
 {
-  "$schema": "https://designsystemdocspec.org/v0.2.1/dsds.bundled.schema.json",
-  "dsdsVersion": "0.2.1",
+  "$schema": "https://designsystemdocspec.org/v0.7/dsds.bundled.schema.json",
+  "dsdsVersion": "0.7",
   "systemMetadata": {
     "name": "Test Manifest System"
   },
-  "documentation": [
-    { "$ref": "./button.dsds.json#/entity" },
-    { "$ref": "./tokens.dsds.json" }
+  "entityGroups": [
+    {
+      "$ref": "./button.dsds.json#/entity"
+    },
+    {
+      "$ref": "./tokens.dsds.json"
+    }
   ]
 }

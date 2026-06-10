@@ -11,10 +11,26 @@ export function loadConfig() {
     ? rawPaths.split(',').map(p => expandHome(p.trim())).filter(Boolean)
     : [];
 
+  const rawLintPaths = process.env['LINT_PATHS'];
+  const lintPaths = rawLintPaths
+    ? rawLintPaths.split(',').map(p => expandHome(p.trim())).filter(Boolean)
+    : [];
+
+  const rawLintPlugins = process.env['LINT_PLUGINS'];
+  const lintPlugins = rawLintPlugins
+    ? rawLintPlugins.split(',').map(p => p.trim()).filter(Boolean)
+    : [];
+
+  const rawLintResolveDir = process.env['LINT_RESOLVE_DIR'];
+  const lintResolveDir = rawLintResolveDir ? expandHome(rawLintResolveDir.trim()) : process.cwd();
+
   const rawIntro = process.env['DSDS_INTRO_PATH'];
   return {
     paths,
+    lintPaths,
+    lintPlugins,
+    lintResolveDir,
     introPath: rawIntro ? expandHome(rawIntro.trim()) : null,
-    schemaVersion: process.env['DSDS_SCHEMA_VERSION'] ?? '0.5.1',
+    schemaVersion: process.env['DSDS_SCHEMA_VERSION'] ?? '0.7.2',
   };
 }

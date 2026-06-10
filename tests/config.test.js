@@ -6,7 +6,7 @@ describe('loadConfig', () => {
   const orig = { ...process.env };
 
   afterEach(() => {
-    for (const key of ['DSDS_PATHS', 'DSDS_SCHEMA_VERSION']) {
+    for (const key of ['DSDS_PATHS', 'DSDS_SCHEMA_VERSION', 'LINT_PLUGINS', 'LINT_RESOLVE_DIR']) {
       if (orig[key] === undefined) delete process.env[key];
       else process.env[key] = orig[key];
     }
@@ -36,10 +36,10 @@ describe('loadConfig', () => {
     expect(config.paths).toEqual(['/a/b.json', '/c/d.json']);
   });
 
-  it('defaults schemaVersion to 0.5.1', () => {
+  it('defaults schemaVersion to 0.7.1', () => {
     delete process.env['DSDS_SCHEMA_VERSION'];
     const config = loadConfig();
-    expect(config.schemaVersion).toBe('0.5.1');
+    expect(config.schemaVersion).toBe('0.7.2');
   });
 
   it('uses DSDS_SCHEMA_VERSION when set', () => {
@@ -58,5 +58,41 @@ describe('loadConfig', () => {
     process.env['DSDS_PATHS'] = '~/a.dsds.json,/absolute/b.dsds.json';
     const config = loadConfig();
     expect(config.paths).toEqual([`${homedir()}/a.dsds.json`, '/absolute/b.dsds.json']);
+  });
+
+  it('returns empty lintPlugins when LINT_PLUGINS is not set', () => {
+    delete process.env['LINT_PLUGINS'];
+    const config = loadConfig();
+    expect(config.lintPlugins).toEqual([]);
+  });
+
+  it('splits LINT_PLUGINS by comma', () => {
+    process.env['LINT_PLUGINS'] = 'eslint-plugin-a,eslint-plugin-b';
+    const config = loadConfig();
+    expect(config.lintPlugins).toEqual(['eslint-plugin-a', 'eslint-plugin-b']);
+  });
+
+  it('trims whitespace from LINT_PLUGINS', () => {
+    process.env['LINT_PLUGINS'] = '  eslint-plugin-a , eslint-plugin-b  ';
+    const config = loadConfig();
+    expect(config.lintPlugins).toEqual(['eslint-plugin-a', 'eslint-plugin-b']);
+  });
+
+  it('defaults lintResolveDir to cwd when LINT_RESOLVE_DIR is not set', () => {
+    delete process.env['LINT_RESOLVE_DIR'];
+    const config = loadConfig();
+    expect(config.lintResolveDir).toBe(process.cwd());
+  });
+
+  it('sets lintResolveDir from LINT_RESOLVE_DIR', () => {
+    process.env['LINT_RESOLVE_DIR'] = '/some/project';
+    const config = loadConfig();
+    expect(config.lintResolveDir).toBe('/some/project');
+  });
+
+  it('expands ~ in LINT_RESOLVE_DIR', () => {
+    process.env['LINT_RESOLVE_DIR'] = '~/my-project';
+    const config = loadConfig();
+    expect(config.lintResolveDir).toBe(`${homedir()}/my-project`);
   });
 });

@@ -23,6 +23,7 @@ import { getEntityDef, getEntityHandler } from './tools/get-entity.js';
 import { searchEntitiesDef, searchEntitiesHandler } from './tools/search-entities.js';
 import { getDocumentBlockDef, getDocumentBlockHandler } from './tools/get-document-block.js';
 import { getAgentContextDef, getAgentContextHandler } from './tools/get-agent-context.js';
+import { lintCodeDef, lintCodeHandler } from './tools/lint-code.js';
 
 const BASE_INSTRUCTIONS = `
 DSDS MCP — Design System Documentation Spec v${BUNDLED_VERSION}
@@ -41,6 +42,9 @@ DESIGN SYSTEM TOOLS — for querying an existing DSDS document (requires DSDS_PA
 RESOURCES: Each design system entity is also available as a resource at dsds://entity/{identifier}.
 
 Note: If DSDS_PATHS is not set, design system tools will return setup instructions. Spec tools always work.
+
+LINT TOOLS — for linting code against configured ESLint plugins (requires LINT_PLUGINS to be configured):
+- dsds_lint_code(code, filename?) — lint a code snippet and return violations
 `.trim();
 
 /**
@@ -152,7 +156,7 @@ function promptMessage(text) {
   return { role: 'user', content: { type: 'text', text } };
 }
 
-export function createServer(getSystems, getSummaries, introEntity = null) {
+export function createServer(getSystems, getSummaries, introEntity = null, getLintConfig = null) {
   const introText = renderIntroEntity(introEntity);
   const INSTRUCTIONS = introText
     ? `${BASE_INSTRUCTIONS}\n\n${introText}`
@@ -177,6 +181,7 @@ export function createServer(getSystems, getSummaries, introEntity = null) {
     searchEntitiesDef,
     getDocumentBlockDef,
     getAgentContextDef,
+    lintCodeDef,
   ];
 
   const toolMap = new Map(toolDefs.map(t => [t.name, t]));
@@ -205,6 +210,7 @@ export function createServer(getSystems, getSummaries, introEntity = null) {
         case 'dsds_search_entities':      return searchEntitiesHandler(args, getSystems, getSummaries);
         case 'dsds_get_document_block':   return getDocumentBlockHandler(args, getSystems);
         case 'dsds_get_agent_context':    return getAgentContextHandler(args, getSystems);
+        case 'dsds_lint_code':            return lintCodeHandler(args, getLintConfig ?? (() => ({ plugins: [], resolveDir: process.cwd() })));
         default:                          return errorResponse(`Unknown tool: "${name}"`);
       }
     } catch (err) {

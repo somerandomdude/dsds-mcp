@@ -3,7 +3,7 @@ import { getUpdateNotice } from '../spec/version.js';
 export const getAgentContextDef = {
   name: 'dsds_get_agent_context',
   description:
-    'Get the machine-readable agent context for an entity — constraints, disambiguation, anti-patterns, and keywords. ' +
+    'Get the agent-facing context for an entity — its agent-only document blocks (agentDocumentBlocks) plus the hard constraints from its human-facing guidelines. ' +
     'This is the most LLM-optimized content in a DSDS document. Use it to understand the rules and edge cases for an entity before building with it.',
   inputSchema: {
     type: 'object',
@@ -16,6 +16,58 @@ export const getAgentContextDef = {
     required: ['identifier'],
   },
 };
+
+const asText = v => (typeof v === 'string' ? v : (v?.value ?? ''));
+
+function renderGuidelines(block, lines) {
+  for (const item of block.items ?? []) {
+    const level = item.level ? `**${item.level}** — ` : '';
+    lines.push(`- ${level}${asText(item.guidance)}`);
+    if (item.rationale) lines.push(`  - Why: ${asText(item.rationale)}`);
+    if (item.evidence) lines.push(`  - Evidence: ${item.evidence}`);
+    for (const c of item.criteria ?? []) {
+      lines.push(`  - Criterion \`${c.identifier}\`: ${asText(c.statement)}`);
+    }
+  }
+  lines.push('');
+}
+
+function renderUseCases(block, lines) {
+  if (block.purpose) lines.push(asText(block.purpose), '');
+  for (const uc of block.items ?? []) {
+    const stance = uc.stance === 'discouraged' ? 'Avoid when' : 'Use when';
+    let line = `- **${stance}:** ${asText(uc.description)}`;
+    if (uc.alternative?.identifier) {
+      line += ` → use \`${uc.alternative.identifier}\` instead`;
+      if (uc.alternative.rationale) line += ` (${asText(uc.alternative.rationale)})`;
+    }
+    lines.push(line);
+  }
+  lines.push('');
+}
+
+function renderSections(block, lines) {
+  for (const section of block.items ?? []) {
+    if (section.title) lines.push(`**${section.title}**`, '');
+    if (section.body) lines.push(asText(section.body), '');
+    for (const ex of section.examples ?? []) {
+      if (ex.description) lines.push(ex.description, '');
+      if (ex.presentation?.kind === 'code') {
+        lines.push('```' + (ex.presentation.language ?? ''), ex.presentation.code, '```', '');
+      }
+    }
+  }
+}
+
+function renderBlock(block, lines) {
+  switch (block.kind) {
+    case 'guidelines': lines.push('## Rules', ''); renderGuidelines(block, lines); break;
+    case 'useCases': lines.push('## When to use', ''); renderUseCases(block, lines); break;
+    case 'sections': renderSections(block, lines); break;
+    default:
+      lines.push(`## ${block.kind}`, '', '```json', JSON.stringify(block, null, 2), '```', '');
+  }
+}
 
 export async function getAgentContextHandler({ identifier }, getSystems) {
   const systems = getSystems();
@@ -43,86 +95,46 @@ export async function getAgentContextHandler({ identifier }, getSystems) {
     };
   }
 
-  if (!found.agents) {
+  const agentBlocks = found.agentDocumentBlocks ?? [];
+
+  // Hard constraints from the human-facing guidelines — agents must obey
+  // these too; they are already machine-readable (RFC 2119 levels).
+  const hardRules = (found.documentBlocks ?? [])
+    .filter(b => b.kind === 'guidelines')
+    .flatMap(b => b.items ?? [])
+    .filter(item => item.level === 'MUST' || item.level === 'MUST_NOT');
+
+  if (agentBlocks.length === 0 && hardRules.length === 0) {
     const lines = [
       `# ${found.name ?? found.identifier} — no agent context defined`,
       '',
-      `This entity has no \`agents\` field. Consider adding one to improve how AI agents use this component.`,
+      'This entity has no `agentDocumentBlocks` and no MUST/MUST_NOT guidelines.',
       '',
-      'The `agents` field supports:',
-      '- **`constraints`** — must/should/must-not rules in structured form',
-      '- **`disambiguation`** — how to tell this apart from similar entities',
-      '- **`antiPatterns`** — common mistakes with corrections',
-      '- **`keywords`** — terms that help agents discover this entity',
-      '',
-      'Example:',
-      '```json',
-      JSON.stringify({
-        agents: {
-          constraints: [
-            { level: 'must', rule: 'Always provide a visible label.' },
-            { level: 'must-not', rule: 'Do not use for navigation.' },
-          ],
-          disambiguation: 'Use this for actions, not navigation.',
-          antiPatterns: [{ pattern: 'Common mistake.', correction: 'Correct approach.' }],
-          keywords: ['keyword-one', 'keyword-two'],
-        },
-      }, null, 2),
-      '```',
+      'Add an `agentDocumentBlocks` array — it accepts the same document block kinds as `documentBlocks` but is intended for agent (AI/LLM) consumption only and is never rendered for humans. Typical content:',
+      '- A `guidelines` block with generation constraints (`level`: MUST/MUST_NOT, optional `evidence`)',
+      '- A `useCases` block disambiguating this entity from confusable ones (discouraged items with `alternative`)',
+      '- A `sections` block with ready-to-use code examples',
     ];
     return { content: [{ type: 'text', text: lines.join('\n') }] };
   }
-
-  const { intent, constraints = [], disambiguation, antiPatterns = [], keywords = [] } = found.agents;
 
   const lines = [
     `# ${found.name ?? found.identifier} — Agent Context`,
     '',
   ];
 
-  if (intent) {
-    lines.push('## Intent', '', intent, '');
+  if (found.description) {
+    lines.push(asText(found.description), '');
   }
 
-  if (disambiguation) {
-    lines.push('## Disambiguation', '');
-    if (Array.isArray(disambiguation)) {
-      for (const d of disambiguation) {
-        lines.push(`**vs ${d.entity}:** ${d.distinction}`);
-      }
-    } else {
-      lines.push(disambiguation);
-    }
-    lines.push('');
+  if (agentBlocks.length > 0) {
+    lines.push('# Agent-only documentation', '');
+    for (const block of agentBlocks) renderBlock(block, lines);
   }
 
-  if (constraints.length > 0) {
-    lines.push('## Constraints', '');
-    const grouped = { must: [], 'must-not': [], should: [], 'should-not': [] };
-    for (const c of constraints) {
-      (grouped[c.level] ??= []).push(c.rule);
-    }
-    for (const [level, rules] of Object.entries(grouped)) {
-      if (rules.length === 0) continue;
-      lines.push(`**${level.toUpperCase()}**`);
-      for (const rule of rules) lines.push(`- ${rule}`);
-      lines.push('');
-    }
-  }
-
-  if (antiPatterns.length > 0) {
-    lines.push('## Anti-patterns', '');
-    for (const ap of antiPatterns) {
-      const avoid = ap.description ?? ap.pattern ?? '';
-      const instead = ap.instead ?? ap.correction ?? '';
-      lines.push(`**Avoid:** ${avoid}`);
-      if (instead) lines.push(`**Instead:** ${instead}`);
-      lines.push('');
-    }
-  }
-
-  if (keywords.length > 0) {
-    lines.push('## Keywords', '', keywords.join(', '), '');
+  if (hardRules.length > 0) {
+    lines.push('# Hard constraints from the human-facing guidelines', '');
+    renderGuidelines({ items: hardRules }, lines);
   }
 
   const notice = getUpdateNotice();

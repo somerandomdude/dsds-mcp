@@ -55,8 +55,8 @@ Key blocks to check for components:
 - **\`variants\`** — option axes (e.g. emphasis: primary | secondary | ghost)
 - **\`states\`** — how the component behaves in hover, focus, disabled, loading, etc.
 - **\`accessibility\`** — WCAG level, keyboard interactions, required ARIA attributes
-- **\`guidelines\`** — enforced rules (look for \`must\` and \`must not\` entries)
-- **\`import\`** — exact package paths and framework snippets
+- **\`guidelines\`** — enforced rules (look for \`MUST\` and \`MUST_NOT\` entries, and \`criteria\` you can check against)
+- **\`imports\`** — exact package paths and framework snippets
 
 If you only need one section, use \`dsds_get_document_block(identifier, blockType)\`
 instead of fetching the full entity.
@@ -151,12 +151,12 @@ your entity and what each one captures.
 
 Prioritize the blocks that answer the questions engineers ask most:
 
-1. **\`purpose\`** — when should I use this, and when should I not?
+1. **\`useCases\`** — when should I use this, and when should I not?
 2. **\`api\`** — what properties, events, and slots does this expose?
 3. **\`guidelines\`** — what rules must I follow when using this?
 4. **\`accessibility\`** — what are the WCAG requirements and keyboard behaviors?
 5. **\`variants\`** — what option axes exist?
-6. **\`import\`** — how do I import and use this in code?
+6. **\`imports\`** — how do I import and use this in code?
 
 ---
 
@@ -167,16 +167,18 @@ Do not wait until the end — fix errors incrementally.
 
 ---
 
-### Step 6 — Add agent context
+### Step 6 — Add agent-only documentation
 
-Once the core documentation is written, add an \`agents\` field to the entity.
-This is machine-readable context that helps AI agents use the system correctly.
+Once the core documentation is written, add an \`agentDocumentBlocks\` array to
+the entity. It accepts the same document block kinds as \`documentBlocks\`, but
+is intended for agent (AI/LLM) consumption only — tools never render it for
+humans. Use it for guidance that would be noise for human readers:
 
-Include:
-- **\`constraints\`** — must/should/must-not rules in structured form
-- **\`disambiguation\`** — how to tell this entity apart from similar ones
-- **\`antiPatterns\`** — common mistakes with corrections
-- **\`keywords\`** — terms that help agents discover this entity by search
+- A **\`guidelines\`** block with generation constraints (\`level\`: MUST/MUST_NOT,
+  optional \`evidence\` from test runs, \`criteria\` agents can self-check against)
+- A **\`useCases\`** block disambiguating this entity from confusable ones
+  (discouraged items with an \`alternative\`)
+- A **\`sections\`** block with ready-to-use code examples
 
 This step significantly improves agent behavior when building with the system.
 `.trim();

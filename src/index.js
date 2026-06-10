@@ -29,6 +29,10 @@ async function main() {
     }
   }
 
+  if (config.lintPlugins.length > 0) {
+    process.stderr.write(`[dsds-mcp] Lint plugins: ${config.lintPlugins.join(', ')} (resolving from ${config.lintResolveDir})\n`);
+  }
+
   startUpdateCheck();
 
   // Shared mutable state — watcher updates these in place on file change
@@ -37,10 +41,13 @@ async function main() {
     summaries: summarizeEntities(systems),
   };
 
+  const getLintConfig = () => ({ plugins: config.lintPlugins, resolveDir: config.lintResolveDir });
+
   const server = createServer(
     () => state.systems,
     () => state.summaries,
     introEntity,
+    getLintConfig,
   );
 
   startWatching(config.paths, state);

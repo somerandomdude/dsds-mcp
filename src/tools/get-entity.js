@@ -52,9 +52,12 @@ export async function getEntityHandler({ identifier }, getSystems, getSummaries)
     '',
   ];
 
+  if (found.description) {
+    lines.push(`## Description\n\n${resolveText(found.description)}\n`);
+  }
+
   if (found.metadata) {
     const m = found.metadata;
-    if (m.description) lines.push(`## Description\n\n${resolveText(m.description)}\n`);
     if (m.summary) lines.push(`**Summary:** ${m.summary}\n`);
     if (m.status) lines.push(`**Status:** ${resolveStatus(m.status)}\n`);
     if (m.tags?.length) lines.push(`**Tags:** ${m.tags.join(', ')}\n`);
@@ -73,8 +76,14 @@ export async function getEntityHandler({ identifier }, getSystems, getSummaries)
     lines.push('*No document blocks defined for this entity.*');
   }
 
-  if (found.agents) {
-    lines.push('## Agent Context', '', '```json', JSON.stringify(found.agents, null, 2), '```');
+  if (found.agentDocumentBlocks?.length) {
+    lines.push(
+      `## Agent Document Blocks (${found.agentDocumentBlocks.length} block${found.agentDocumentBlocks.length !== 1 ? 's' : ''} — agent consumption only)`,
+      ''
+    );
+    for (const block of found.agentDocumentBlocks) {
+      lines.push(`### ${block.kind} (agent-only)`, '', '```json', JSON.stringify(block, null, 2), '```', '');
+    }
   }
 
   const notice = getUpdateNotice();
@@ -90,5 +99,5 @@ function resolveText(value) {
 
 function resolveStatus(status) {
   if (!status) return '';
-  return typeof status === 'string' ? status : (status.value ?? '');
+  return typeof status === 'string' ? status : (status.overall ?? status.value ?? '');
 }

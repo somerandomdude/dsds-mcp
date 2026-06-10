@@ -69,7 +69,7 @@ describe('summarizeEntities', () => {
       name: 'Button',
       kind: 'component',
       status: 'stable',
-      tags: ['action', 'interactive'],
+      tags: ['action', 'interactive', 'button', 'cta', 'call to action', 'submit', 'click', 'press', 'trigger'],
     });
   });
 

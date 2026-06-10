@@ -1,6 +1,6 @@
 {
-  "$schema": "https://designsystemdocspec.org/v0.2.1/dsds.bundled.schema.json",
-  "dsdsVersion": "0.2.1",
+  "$schema": "https://designsystemdocspec.org/v0.7/dsds.bundled.schema.json",
+  "dsdsVersion": "0.7",
   "entity": {
     "kind": "component",
     "identifier": "button",
@@ -9,7 +9,17 @@
       "description": "Triggers an action or event when activated.",
       "summary": "Triggers an action or event.",
       "status": "stable",
-      "tags": ["action", "interactive"],
+      "tags": [
+        "action",
+        "interactive",
+        "button",
+        "cta",
+        "call to action",
+        "submit",
+        "click",
+        "press",
+        "trigger"
+      ],
       "since": "1.0.0"
     },
     "documentBlocks": [
@@ -44,24 +54,30 @@
         "notes": "Must have a visible focus indicator. Use aria-disabled instead of the disabled attribute when the button should remain focusable."
       }
     ],
-    "agents": {
-      "constraints": [
-        { "level": "must", "rule": "Always provide a visible text label or aria-label." },
-        { "level": "must-not", "rule": "Do not use for navigation — use a link element instead." },
-        { "level": "should", "rule": "Pair a disabled button with a tooltip or inline explanation of why it is disabled." }
-      ],
-      "disambiguation": "Use Button for actions that change state or submit data. Use Link for navigation. Use IconButton when label space is unavailable.",
-      "antiPatterns": [
-        {
-          "pattern": "Setting disabled=true without explanation",
-          "correction": "Always pair a disabled Button with a tooltip or visible explanation so users understand why the action is unavailable."
-        },
-        {
-          "pattern": "Using a Button to navigate to another page",
-          "correction": "Use a Link component or an anchor element for navigation. Buttons are for actions, not navigation."
-        }
-      ],
-      "keywords": ["button", "cta", "call to action", "action", "submit", "click", "press", "trigger", "interactive"]
-    }
+    "agentDocumentBlocks": [
+      {
+        "kind": "guidelines",
+        "items": [
+          {
+            "guidance": "Always provide a visible text label or aria-label.",
+            "level": "must"
+          },
+          {
+            "guidance": "Do not use for navigation — use a link element instead.",
+            "level": "must-not"
+          },
+          {
+            "guidance": "Pair a disabled button with a tooltip or inline explanation of why it is disabled.",
+            "level": "should"
+          },
+          {
+            "level": "MUST_NOT"
+          },
+          {
+            "level": "MUST_NOT"
+          }
+        ]
+      }
+    ]
   }
 }
