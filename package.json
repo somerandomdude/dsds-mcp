@@ -33,9 +33,12 @@
     "eslint": ">=9.0.0"
   },
   "peerDependenciesMeta": {
-    "eslint": { "optional": true }
+    "eslint": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "eslint": "^10.4.1",
     "vitest": "^2.0.0"
   },
   "engines": {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://designsystemdocspec.org/v0.7.2/dsds.bundled.schema.json",
-  "title": "Design System Documentation Spec (DSDS) v0.7.2 — Bundled",
+  "$id": "https://designsystemdocspec.org/v0.10.0/dsds.bundled.schema.json",
+  "title": "Design System Documentation Spec (DSDS) v0.10.0 — Bundled",
   "description": "Single-file bundled version of the DSDS schema. Auto-generated from the split schema files by scripts/bundle.js. Use the split files for development; use this file for tools that require a single schema document.",
   "type": "object",
   "required": [
@@ -26,7 +26,7 @@
     },
     "dsdsVersion": {
       "type": "string",
-      "const": "0.7.2",
+      "const": "0.10.0",
       "description": "The DSDS spec version this document conforms to."
     },
     "systemInfo": {
@@ -68,6 +68,97 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "conformanceLevel": {
+      "type": "string",
+      "enum": [
+        "must",
+        "should",
+        "should-not",
+        "must-not"
+      ],
+      "description": "Conformance level, named for RFC 2119 requirement levels: 'must' and 'must-not' are absolute requirements (non-compliance is a defect); 'should' and 'should-not' are strong defaults that valid exceptions may override when the implications are understood. Values are lowercase kebab-case like every DSDS-native vocabulary — in prose, the keywords stay capitalized (MUST, SHOULD NOT) where they carry conformance weight. Shared by guideline entries and criteria so reports aggregate on one severity vocabulary."
+    },
+    "verificationMode": {
+      "type": "string",
+      "enum": [
+        "automated",
+        "assisted",
+        "manual"
+      ],
+      "description": "How a result for this criterion is produced — who decides the outcome. 'automated': a runner fully decides; a `check` MUST be present. 'assisted': a tool surfaces candidates but a human decides; `check` diagnostics are advisory. 'manual': pure human judgment; no `check` applies — `techniques` and `failures` serve as the reviewer's procedure. This is a closed set: the axis is who decides, and named procedures (e.g. a design review) are the 'how', which belongs in `techniques`. When omitted, tools MUST NOT assume the criterion is automatable."
+    },
+    "criterionCheck": {
+      "type": "object",
+      "description": "A dispatch envelope for automated or assisted verification. DSDS defines only the envelope: `scheme` names the runner or rule system (open vocabulary, e.g. 'axe-core', 'vitest', 'stylelint', 'lighthouse'); all other properties are scheme-specific configuration owned by the named tool. A runner that does not recognize the scheme MUST report the criterion as skipped, never as passing. Like `extensions`, this object is intentionally open: execution semantics live in tools, not in this specification.",
+      "required": [
+        "scheme"
+      ],
+      "properties": {
+        "scheme": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]*$",
+          "description": "Identifier of the rule system or runner this check dispatches to. MUST be lowercase; dots permitted for namespacing (e.g. 'com.acme.contract-tests')."
+        }
+      },
+      "additionalProperties": true
+    },
+    "criterionFixture": {
+      "type": "object",
+      "description": "An example with a declared outcome, used as a verification fixture for a criterion. Identical to `example` plus a required `outcome`. NOTE: this is an intentional copy of the `example` shape, not a composition — `example` is a closed schema (additionalProperties: false), so allOf-extension cannot add `outcome`. When `example` changes, change this definition to match (example.schema.json carries the mirror note). Fixtures make criteria self-verifying: a conformance runner SHOULD execute the criterion's `check` (when present) against each fixture and confirm the declared outcome is reproduced — a 'fail' fixture that passes means the check no longer detects what it claims to.",
+      "anyOf": [
+        {
+          "required": [
+            "presentation",
+            "outcome"
+          ]
+        },
+        {
+          "required": [
+            "value",
+            "outcome"
+          ]
+        }
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "A human-readable caption for the example (e.g., 'Primary button in default state'). For API property examples, use `value` for the literal content and `title` for the display label."
+        },
+        "description": {
+          "type": "string",
+          "description": "An explanation of the example — why it is encouraged, discouraged, or notable."
+        },
+        "value": {
+          "description": "A literal value carried by the example. Use it for API property examples, where the content is a concrete value rather than a visual demo. It can display code that reflects the example. Accepts any JSON type: string, number, boolean, object, array, or null. When given without a presentation, this value alone is the example. Do not use `value` for display text — use `title` for captions and `description` for explanations."
+        },
+        "presentation": {
+          "description": "The visual or interactive presentation for the example. Required when no `value` is set. Optional when `value` is present. Value-only examples are concrete data points that tools render as table rows or inline displays.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/presentationImage"
+            },
+            {
+              "$ref": "#/$defs/presentationVideo"
+            },
+            {
+              "$ref": "#/$defs/presentationCode"
+            },
+            {
+              "$ref": "#/$defs/presentationUrl"
+            }
+          ]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail"
+          ],
+          "description": "Whether this fixture satisfies ('pass') or violates ('fail') the criterion. Replaces encoding pass/fail in `title` prose, which tools cannot rely on."
+        }
+      },
+      "additionalProperties": false
+    },
     "reference": {
       "type": "object",
       "description": "A citation of an external standard or requirement. This is a published rule the docs address (WCAG, platform guidelines, vendor compliance frameworks).",
@@ -89,7 +180,7 @@
     },
     "criterion": {
       "type": "object",
-      "description": "A testable success criterion: a condition an implementation must meet that you can verify objectively. Criteria let docs act as a test harness. A check runs against the `statement` and reports pass or fail under the criterion's `identifier`. Pair it with `techniques` (how to pass), `failures` (what failing looks like), `references` (the external standards it aligns with), and `examples` (usually a passing and a failing case).",
+      "description": "A testable success criterion: an objectively verifiable condition an implementation must meet. Criteria let documentation act as a test harness — a result is produced per `verification` mode and reported under the criterion's `identifier`. `statement` is the normative, human-readable source of truth; `check`, when present, is its machine-dispatchable shadow and never replaces it. Pair with `techniques` (how to pass), `failures` (what failing looks like), `references` (external standards), and `examples` (fixtures with declared outcomes).",
       "required": [
         "identifier",
         "statement"
@@ -98,7 +189,7 @@
         "identifier": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$",
-          "description": "Stable identifier for this criterion, unique within the parent entity (e.g., 'touch-target-minimum', 'single-primary-action'). MUST be lowercase kebab-case. Test runs report pass or fail against this identifier. It SHOULD NOT change once checks depend on it. Renaming breaks result history across runs."
+          "description": "Stable identifier for this criterion, unique within the parent entity (e.g., 'touch-target-minimum', 'single-primary-action'). MUST be lowercase kebab-case. Test runs report pass/fail against this identifier, so it SHOULD NOT change once checks depend on it — renaming breaks result history across runs."
         },
         "title": {
           "type": "string",
@@ -106,11 +197,11 @@
         },
         "statement": {
           "$ref": "#/$defs/richText",
-          "description": "The testable statement of what success looks like. You MUST be able to verify it objectively — by inspection, static analysis, or runtime measurement. Avoid vague language like 'feels right' or 'looks balanced' (e.g., 'Interactive elements present a hit area of at least 44×44 px')."
+          "description": "The testable statement of what success looks like. MUST be objectively verifiable — by inspection, static analysis, or runtime measurement. Avoid vague language like 'feels right' or 'looks balanced' (e.g., 'Interactive elements present a hit area of at least 44×44 px')."
         },
         "techniques": {
           "type": "array",
-          "description": "Ways to satisfy this criterion — the passing patterns (e.g., 'Apply `min-height: 44px` to every interactive element', 'Use the `<Button>` component without overriding its default height').",
+          "description": "Sufficient ways to satisfy this criterion — the passing patterns (e.g., 'Apply `min-height: 44px` to every interactive element', 'Use the `<Button>` component without overriding its default height').",
           "items": {
             "$ref": "#/$defs/richText"
           },
@@ -134,9 +225,9 @@
         },
         "examples": {
           "type": "array",
-          "description": "Examples that show the criterion — usually a before/after pair: one passing and one failing implementation.",
+          "description": "Verification fixtures — typically one passing and one failing implementation, each with a declared `outcome`.",
           "items": {
-            "$ref": "#/$defs/example"
+            "$ref": "#/$defs/criterionFixture"
           },
           "minItems": 1
         },
@@ -145,14 +236,90 @@
           "items": {
             "type": "string"
           },
-          "description": "Freeform keywords that link criteria across guidelines and entities (e.g., 'a11y', 'contrast', 'touch-target')."
+          "description": "Freeform keywords that relate criteria across guidelines and entities (e.g., 'a11y', 'contrast', 'touch-target')."
+        },
+        "level": {
+          "$ref": "#/$defs/conformanceLevel",
+          "description": "The conformance level of this criterion. A criterion referenced by a guideline SHOULD inherit the guideline's `level` when omitted; a standalone criterion SHOULD declare its own."
+        },
+        "verification": {
+          "$ref": "#/$defs/verificationMode"
+        },
+        "check": {
+          "$ref": "#/$defs/criterionCheck"
+        },
+        "since": {
+          "type": "string",
+          "description": "The design system version in which this criterion was introduced (e.g., '1.0.0', '2.3.0'). Criterion identifiers are stable: once published, an identifier MUST NOT be reused for a different requirement — deprecate and mint a new one instead."
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "verification": {
+                "const": "automated"
+              }
+            },
+            "required": [
+              "verification"
+            ]
+          },
+          "then": {
+            "required": [
+              "check"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "verification": {
+                "const": "manual"
+              }
+            },
+            "required": [
+              "verification"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "check"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "entityIdentifier": {
+      "type": "string",
+      "description": "The identifier of a documented DSDS entity (e.g., 'button', 'form-field', 'color-text-primary'). MUST match that entity's `identifier`. Tools SHOULD resolve it against the entity catalog to build navigable cross-references; a reference that resolves to nothing is a defect in the document."
+    },
+    "entityRole": {
+      "type": "string",
+      "description": "The role the referenced entity plays in this context (e.g., 'Carries the inline error', 'Submit, disabled while invalid'). When omitted, the reference is a general association."
+    },
+    "entityRef": {
+      "type": "object",
+      "description": "A reference to another entity by identifier, with an optional role describing what the entity does in this context. Used where a position points at an entity and nothing else; for pointers that may also carry a URL or external-resource kind, use `link`.",
+      "required": [
+        "identifier"
+      ],
+      "properties": {
+        "identifier": {
+          "$ref": "#/$defs/entityIdentifier"
+        },
+        "role": {
+          "$ref": "#/$defs/entityRole"
         }
       },
       "additionalProperties": false
     },
     "example": {
       "type": "object",
-      "description": "A single example. It needs at least a presentation or a value (or both). The presentation shows a visual or interactive demo. The value carries a literal for API property examples. Optional title and description add context. When only a value is present, the example is a data point (e.g., a prop value of 'primary' or a token value of 44). Tools SHOULD render value-only examples as table rows or inline displays.",
+      "description": "A single example. It needs at least a presentation or a value (or both). The presentation shows a visual or interactive demo. The value carries a literal for API property examples. Optional title and description add context. When only a value is present, the example is a data point (e.g., a prop value of 'primary' or a token value of 44). Tools SHOULD render value-only examples as table rows or inline displays. NOTE: `criterionFixture` in criterion.schema.json is an intentional copy of this shape plus a required `outcome` (closed schemas prevent allOf-extension). When this definition changes, change criterionFixture to match.",
       "anyOf": [
         {
           "required": [
@@ -321,16 +488,16 @@
           "description": "The URL of the linked resource. MUST be a valid absolute URI. Required for external resource links. Optional for internal artifact references, where `identifier` names the artifact. When both `url` and `identifier` are present, `url` points to the artifact's docs page and `identifier` is the machine-readable cross-reference."
         },
         "identifier": {
-          "type": "string",
-          "description": "The identifier of a linked DSDS artifact (e.g., 'button', 'form-field', 'color-text'). MUST match the `identifier` property of a documented DSDS artifact. Required for internal artifact references. Optional for external resource links. When present, tools SHOULD resolve this identifier against the artifact catalog to build navigable cross-references."
+          "$ref": "#/$defs/entityIdentifier",
+          "description": "The identifier of a referenced DSDS entity. MUST match the `identifier` property of a documented entity — a link with an `identifier` is an entity reference and follows entityRef resolution rules. Required for internal entity references; optional for external resource links. When both `url` and `identifier` are present, `url` points to the entity's docs page and `identifier` is the machine-readable cross-reference."
         },
         "label": {
           "type": "string",
           "description": "Display text for this link — what a user sees when the link renders (e.g., 'React component source', 'Design file — variants', 'Button component'). Use it for the display name of the resource. To describe an internal artifact's role, use `role` instead."
         },
         "role": {
-          "type": "string",
-          "description": "The role this artifact plays in the current entity (e.g., 'Primary action trigger', 'Error summary container', 'Provides semantic text color tokens'). Different from `label`, which is display text for the link itself. Use it on internal artifact references to explain *why* this artifact is linked. When omitted, the link is a general association."
+          "$ref": "#/$defs/entityRole",
+          "description": "The role the referenced entity plays in the current entity (e.g., 'Primary action trigger', 'Provides semantic text color tokens'). Distinct from `label`, which is display text for the link itself. When omitted, the link is a general association."
         },
         "required": {
           "type": "boolean",
@@ -833,12 +1000,10 @@
     },
     "colorContrast": {
       "type": "object",
-      "description": "A color contrast spec: the measured contrast ratio between a foreground and background color pair and the WCAG conformance level it meets.",
+      "description": "A foreground/background color pairing the artifact uses. The pair is the documentation — which combinations occur, and where. Measured contrast ratios are conformance results, not documentation: verify pairs with a criterion (verification: automated) whose check computes ratios from live token values, so the measurement cannot drift from the palette.",
       "required": [
         "foreground",
-        "background",
-        "contrastRatio",
-        "wcagLevel"
+        "background"
       ],
       "properties": {
         "foreground": {
@@ -849,20 +1014,6 @@
           "type": "string",
           "description": "The background token name or resolved color value (e.g., 'color-background-default', '#ffffff', 'var(--button-background)')."
         },
-        "contrastRatio": {
-          "type": "number",
-          "description": "The contrast ratio as a decimal (e.g., 4.5, 7.2, 15.3). It stands for the ratio N:1, where N is this value. Tools MAY format it for display as 'N:1'.",
-          "exclusiveMinimum": 0
-        },
-        "wcagLevel": {
-          "type": "string",
-          "enum": [
-            "A",
-            "AA",
-            "AAA"
-          ],
-          "description": "The WCAG conformance level met by this contrast ratio (matches the block-level `wcagLevel` field). AA requires 4.5:1 for normal text and 3:1 for large text. AAA requires 7:1 for normal text and 4.5:1 for large text."
-        },
         "context": {
           "type": "string",
           "description": "Where this foreground/background combination is used (e.g., 'Label text on primary button background in light mode', 'Secondary text on card surface')."
@@ -872,7 +1023,7 @@
     },
     "accessibility": {
       "type": "object",
-      "description": "Structured accessibility specs for an artifact. Documents keyboard behavior, ARIA attributes, screen reader announcements, focus management, color contrast pairs, and motion considerations. This block differs from `guidelines` blocks. Accessibility specs capture machine-readable data, while guidelines capture actionable rules with rationale. Both can be present on the same artifact.",
+      "description": "Specialized, structured accessibility documentation for an artifact. Every field is data: keyboard interactions, ARIA attributes, per-state announcements, per-trigger focus behaviors, color pairings, and per-animation reduced-motion behaviors. Each entry states what the artifact does, verifiably. This block carries no prose rules — general documentation guidance, with rationale and a conformance level, belongs in a `guidelines` block (category 'accessibility'), and the two blocks complement each other on the same artifact.",
       "required": [
         "kind"
       ],
@@ -913,24 +1064,36 @@
             "$ref": "#/$defs/ariaAttribute"
           }
         },
-        "screenReaderBehavior": {
-          "$ref": "#/$defs/richText",
-          "description": "How the artifact is announced by screen readers in various states. Include announcements for default, focused, disabled, loading, expanded, and other relevant states. Name specific screen readers (VoiceOver, NVDA, JAWS) when behavior differs."
+        "announcements": {
+          "type": "array",
+          "description": "Screen reader announcements, one entry per state or situation. Name a specific screen reader on an entry when behavior differs between them.",
+          "items": {
+            "$ref": "#/$defs/announcement"
+          },
+          "minItems": 1
         },
-        "focusManagement": {
-          "$ref": "#/$defs/richText",
-          "description": "How focus moves into, within, and out of the artifact. Document focus trapping (for modals/dialogs), focus restoration (when dismissing overlays), and programmatic focus movement. Describe both keyboard and programmatic focus behavior."
+        "focusBehaviors": {
+          "type": "array",
+          "description": "Focus movement, one entry per trigger: how focus enters, moves within, and leaves the artifact — including trapping and restoration.",
+          "items": {
+            "$ref": "#/$defs/focusBehavior"
+          },
+          "minItems": 1
         },
         "colorContrast": {
           "type": "array",
-          "description": "Contrast ratio documentation for foreground/background color pairs used by this artifact. Each entry documents a specific pairing, its measured ratio, and the WCAG level it meets.",
+          "description": "The foreground/background color pairings this artifact uses, one entry per pairing. Pairs are declarations of intent; measure them with an automated contrast criterion, not by hand.",
           "items": {
             "$ref": "#/$defs/colorContrast"
           }
         },
-        "motionConsiderations": {
-          "$ref": "#/$defs/richText",
-          "description": "How the artifact respects the prefers-reduced-motion media query. Document what animations or transitions exist and what happens when reduced motion is preferred (e.g., 'The loading spinner is replaced with a static ellipsis indicator')."
+        "reducedMotion": {
+          "type": "array",
+          "description": "Animations and their prefers-reduced-motion behavior, one entry per animation.",
+          "items": {
+            "$ref": "#/$defs/reducedMotionEntry"
+          },
+          "minItems": 1
         }
       },
       "additionalProperties": false,
@@ -957,12 +1120,12 @@
         },
         {
           "required": [
-            "screenReaderBehavior"
+            "announcements"
           ]
         },
         {
           "required": [
-            "focusManagement"
+            "focusBehaviors"
           ]
         },
         {
@@ -972,10 +1135,71 @@
         },
         {
           "required": [
-            "motionConsiderations"
+            "reducedMotion"
           ]
         }
       ]
+    },
+    "announcement": {
+      "type": "object",
+      "description": "What a screen reader announces in one context or state.",
+      "required": [
+        "context",
+        "announcement"
+      ],
+      "properties": {
+        "context": {
+          "type": "string",
+          "description": "The state or situation being announced (e.g., 'default', 'disabled via aria-disabled', 'loading', 'validation failure'). Use 'default' for the resting state."
+        },
+        "announcement": {
+          "type": "string",
+          "description": "What is announced (e.g., '[label], button, dimmed'). Use bracketed placeholders for content that varies."
+        },
+        "screenReader": {
+          "type": "string",
+          "description": "The specific screen reader this announcement applies to (e.g., 'VoiceOver', 'NVDA', 'JAWS'). When omitted, the announcement applies to all screen readers."
+        }
+      },
+      "additionalProperties": false
+    },
+    "focusBehavior": {
+      "type": "object",
+      "description": "How focus moves at one moment in the artifact's lifecycle.",
+      "required": [
+        "trigger",
+        "behavior"
+      ],
+      "properties": {
+        "trigger": {
+          "type": "string",
+          "description": "The moment or event (e.g., 'default', 'open', 'close', 'validation failure', 'disabled'). Use 'default' for normal tab-order participation."
+        },
+        "behavior": {
+          "type": "string",
+          "description": "What focus does (e.g., 'Moves to the error summary', 'Returns to the trigger element', 'Participates in the normal tab order')."
+        }
+      },
+      "additionalProperties": false
+    },
+    "reducedMotionEntry": {
+      "type": "object",
+      "description": "One animation and its behavior under prefers-reduced-motion.",
+      "required": [
+        "animation",
+        "behavior"
+      ],
+      "properties": {
+        "animation": {
+          "type": "string",
+          "description": "The animation or transition (e.g., 'loading spinner rotation', 'background-color 100ms transition')."
+        },
+        "behavior": {
+          "type": "string",
+          "description": "What happens when reduced motion is preferred (e.g., 'Replaced with a static ellipsis indicator', 'Transition removed; state changes apply instantly')."
+        }
+      },
+      "additionalProperties": false
     },
     "anatomyEntry": {
       "type": "object",
@@ -1007,7 +1231,14 @@
           "description": "Design tokens applied to this part. Keys are token-purpose names that say what visual attribute the token controls (e.g., 'background', 'border-radius', 'padding-horizontal', 'text-color'). Values are the token identifiers that supply the value (e.g., 'color-action-primary', 'radius-md', 'space-4'). In a system with a token layer these MUST be token identifiers, not raw values, so the part's styling can't silently drift from the token source.",
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "examples": [
+            {
+              "background": "color-action-primary",
+              "text-color": "color-text-on-action",
+              "border-radius": "radius-md"
+            }
+          ]
         },
         "links": {
           "type": "array",
@@ -1462,7 +1693,7 @@
     },
     "content": {
       "type": "object",
-      "description": "Structured content guidelines: recommended action labels and localization notes. The labels array is a dictionary of standard UI labels with definitions, usage context, and cross-references. The localization array covers i18n concerns like RTL behavior, text expansion, and pluralization. At least one of `labels` or `localization` is required. Content blocks complement `guidelines` blocks. A guideline entry states a rule, such as 'Use sentence case'. Content guidelines give a reference, such as 'Add: Takes an existing object and uses it in a new context'.",
+      "description": "Specialized, structured content documentation: a terminology dictionary of recommended labels and per-concern localization entries. Each entry is reference data — a fact about the system's vocabulary or its i18n behavior. This block carries no prose rules: general content guidance, with rationale and a conformance level, belongs in a `guidelines` block (category 'content'), and the two blocks complement each other — a guideline says 'Use sentence case' (a rule); a content entry says 'Add: takes an existing object and uses it in a new context' (a reference).",
       "required": [
         "kind"
       ],
@@ -1486,7 +1717,7 @@
         },
         "description": {
           "$ref": "#/$defs/richText",
-          "description": "Overview of the content guidelines: content philosophy, voice and tone principles, or the scope of labels and localization rules covered."
+          "description": "Prose overview of what this block covers: the scope of the label dictionary and the localization entries. Content philosophy and voice-and-tone rules are general guidance and belong in a `guidelines` block (category 'content'), not here."
         },
         "labels": {
           "type": "array",
@@ -1830,14 +2061,8 @@
           "description": "Why this guidance exists. Cite evidence, accessibility standards, or user research when available. MUST NOT restate the guidance."
         },
         "level": {
-          "type": "string",
-          "enum": [
-            "MUST",
-            "SHOULD",
-            "SHOULD_NOT",
-            "MUST_NOT"
-          ],
-          "description": "How strictly the guideline should be followed, named for RFC 2119 requirement levels: 'MUST' (non-compliance is a defect), 'SHOULD' (follow in most cases; exceptions need justification), 'SHOULD_NOT' (avoid unless justified), 'MUST_NOT' (violations are defects). Agents treat MUST/MUST_NOT entries as hard limits when generating or reviewing code."
+          "$ref": "#/$defs/conformanceLevel",
+          "description": "How strictly the guideline should be followed, named for RFC 2119 requirement levels: 'must' (non-compliance is a defect), 'should' (follow in most cases; exceptions need justification), 'should-not' (avoid unless justified), 'must-not' (violations are defects). Agents treat must/must-not entries as hard constraints when generating or reviewing code."
         },
         "evidence": {
           "type": "string",
@@ -1886,7 +2111,7 @@
     },
     "guidelines": {
       "type": "object",
-      "description": "Actionable usage rules for an artifact. Each item pairs a guidance statement with a rationale. Categorize by discipline, target a specific anatomy part, and link to external standards like WCAG. Use `guidelines` to answer *how* to use the artifact correctly: concrete do/don't rules, each with a rationale. For *whether* to use it at all, see `useCases`. For the higher-level beliefs behind the rules (on foundations), see `principles`.",
+      "description": "Actionable usage rules for an artifact. Each item pairs a guidance statement with a rationale. Categorize by discipline, target a specific anatomy part, and link to external standards like WCAG. Use `guidelines` to answer *how* to use the artifact correctly: concrete do/don't rules, each with a rationale. For *whether* to use it at all, see `useCases`. For the higher-level beliefs behind the rules (on foundations), see `principles`. Guidelines are the home for general documentation guidance in every discipline — including accessibility rules (category 'accessibility') and content rules (category 'content'); the `accessibility` and `content` blocks are reserved for specialized, structured data.",
       "required": [
         "kind",
         "items"
@@ -1984,10 +2209,11 @@
         },
         "components": {
           "type": "array",
-          "description": "Names of the components involved in this step. Each name MUST match the `name` of a component documented elsewhere in the system. Creates a cross-reference between the pattern's interaction flow and individual component docs.",
+          "description": "The entities involved in this step, as entity references. Each `identifier` MUST match a component documented in the system; the optional `role` says what the component does in this step. Creates a traversable cross-reference between the pattern's interaction flow and individual component docs.",
           "items": {
-            "type": "string"
-          }
+            "$ref": "#/$defs/entityRef"
+          },
+          "minItems": 1
         },
         "examples": {
           "type": "array",
@@ -2166,14 +2392,23 @@
     },
     "scaleStep": {
       "type": "object",
-      "description": "A single step in an ordered scale. Each step links to a design token that supplies the concrete value for that position in the progression. The optional label, value, and description add context for display without copying the token's authoritative definition.",
-      "required": [
-        "token"
+      "description": "One step in the scale. Carries a `token` (when the step is token-backed), a literal `value` (when it is not — pre-tokenization systems, or scales like column counts that have no token layer), or both. At least one of `token` or `value` is required. Do not fabricate token identifiers to satisfy validation — a value-only step is the honest form.",
+      "anyOf": [
+        {
+          "required": [
+            "token"
+          ]
+        },
+        {
+          "required": [
+            "value"
+          ]
+        }
       ],
       "properties": {
         "token": {
           "type": "string",
-          "description": "The token identifier for this step. MUST reference a token defined in the token schema (e.g., 'space-4', 'font-size-300', 'elevation-low'). This is the single source of truth for the step's value. The optional `value` property is a display convenience only."
+          "description": "The identifier of the token that supplies this step's value. MUST match the `identifier` of a token defined elsewhere in the system. Omit for steps that are not token-backed and use `value` instead."
         },
         "label": {
           "type": "string",
@@ -2545,11 +2780,11 @@
         },
         "values": {
           "type": "array",
-          "description": "The possible values for this variant. Must contain at least two entries. Model a single-value dimension as a flag variant instead. Ordering is significant, so tools SHOULD keep it for display.",
+          "description": "The possible values for this variant. A single entry is valid — real systems carry single-value dimensions mid-migration (a new dimension introduced one value at a time). Ordering is significant, so tools SHOULD keep it for display.",
           "items": {
             "$ref": "#/$defs/variantValue"
           },
-          "minItems": 2
+          "minItems": 1
         }
       },
       "additionalProperties": false
@@ -2899,6 +3134,10 @@
           "type": "string",
           "description": "The token identifier. It follows no fixed pattern, so it can support DTCG and design tool naming styles that use dots, slashes, or other separators (e.g., 'color-text-primary', 'color.text.primary', 'color/text/primary'). It also serves as the human-readable display label."
         },
+        "name": {
+          "type": "string",
+          "description": "Optional display name (e.g., 'Primary Text'). When omitted, the `identifier` serves as the display label — the uniform rule for all entities is: display `name` when present, otherwise `identifier`."
+        },
         "tokenType": {
           "type": "string",
           "description": "The type of token aligned with the DTCG spec (e.g., 'color', 'dimension', 'fontFamily', 'fontWeight', 'duration', 'cubicBezier', 'shadow')."
@@ -2962,6 +3201,10 @@
         "identifier": {
           "type": "string",
           "description": "The token group identifier. It follows no fixed pattern, so it can support DTCG and design tool naming styles (e.g., 'color-text', 'color.text', 'color/text'). It also serves as the human-readable display label."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional display name (e.g., 'Primary Text'). When omitted, the `identifier` serves as the display label — the uniform rule for all entities is: display `name` when present, otherwise `identifier`."
         },
         "description": {
           "$ref": "#/$defs/richText",

@@ -1,1 +1,0 @@
-- https://blog.modelcontextprotocol.io/posts/2025-11-03-using-server-instructions/

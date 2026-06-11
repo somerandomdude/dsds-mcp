@@ -48,6 +48,8 @@ async function main() {
     () => state.summaries,
     introEntity,
     getLintConfig,
+    config.feedbackDir,
+    config.logsDir,
   );
 
   startWatching(config.paths, state);

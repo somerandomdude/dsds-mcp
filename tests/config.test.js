@@ -36,10 +36,10 @@ describe('loadConfig', () => {
     expect(config.paths).toEqual(['/a/b.json', '/c/d.json']);
   });
 
-  it('defaults schemaVersion to 0.7.1', () => {
+  it('defaults schemaVersion to 0.10.0', () => {
     delete process.env['DSDS_SCHEMA_VERSION'];
     const config = loadConfig();
-    expect(config.schemaVersion).toBe('0.7.2');
+    expect(config.schemaVersion).toBe('0.10.0');
   });
 
   it('uses DSDS_SCHEMA_VERSION when set', () => {

@@ -24,6 +24,7 @@ import { searchEntitiesDef, searchEntitiesHandler } from './tools/search-entitie
 import { getDocumentBlockDef, getDocumentBlockHandler } from './tools/get-document-block.js';
 import { getAgentContextDef, getAgentContextHandler } from './tools/get-agent-context.js';
 import { lintCodeDef, lintCodeHandler } from './tools/lint-code.js';
+import { feedbackDef, feedbackHandler } from './tools/feedback.js';
 
 const BASE_INSTRUCTIONS = `
 DSDS MCP — Design System Documentation Spec v${BUNDLED_VERSION}
@@ -44,7 +45,11 @@ RESOURCES: Each design system entity is also available as a resource at dsds://e
 Note: If DSDS_PATHS is not set, design system tools will return setup instructions. Spec tools always work.
 
 LINT TOOLS — for linting code against configured ESLint plugins (requires LINT_PLUGINS to be configured):
-- dsds_lint_code(code, filename?) — lint a code snippet and return violations
+- dsds_lint_code(files=[{code, filename}]) — lint ALL your generated files in one call (preferred)
+- dsds_lint_code(code, filename?) — lint a single file
+- IMPORTANT: lint every .tsx/.ts file you generate, not just the main component. Pass them all in the \`files\` array at once.
+
+FEEDBACK: Before you finish your session, call dsds_feedback to rate the experience (1–5) and note what was helpful or confusing. Call it as your last tool call — before emitting any final output or files. This is required at the end of every session.
 `.trim();
 
 /**
@@ -156,7 +161,7 @@ function promptMessage(text) {
   return { role: 'user', content: { type: 'text', text } };
 }
 
-export function createServer(getSystems, getSummaries, introEntity = null, getLintConfig = null) {
+export function createServer(getSystems, getSummaries, introEntity = null, getLintConfig = null, feedbackDir = null, logsDir = null) {
   const introText = renderIntroEntity(introEntity);
   const INSTRUCTIONS = introText
     ? `${BASE_INSTRUCTIONS}\n\n${introText}`
@@ -182,6 +187,7 @@ export function createServer(getSystems, getSummaries, introEntity = null, getLi
     getDocumentBlockDef,
     getAgentContextDef,
     lintCodeDef,
+    feedbackDef,
   ];
 
   const toolMap = new Map(toolDefs.map(t => [t.name, t]));
@@ -210,7 +216,8 @@ export function createServer(getSystems, getSummaries, introEntity = null, getLi
         case 'dsds_search_entities':      return searchEntitiesHandler(args, getSystems, getSummaries);
         case 'dsds_get_document_block':   return getDocumentBlockHandler(args, getSystems);
         case 'dsds_get_agent_context':    return getAgentContextHandler(args, getSystems);
-        case 'dsds_lint_code':            return lintCodeHandler(args, getLintConfig ?? (() => ({ plugins: [], resolveDir: process.cwd() })));
+        case 'dsds_lint_code':            return lintCodeHandler(args, getLintConfig ?? (() => ({ plugins: [], resolveDir: process.cwd() })), logsDir);
+        case 'dsds_feedback':             return feedbackHandler(args, feedbackDir);
         default:                          return errorResponse(`Unknown tool: "${name}"`);
       }
     } catch (err) {
