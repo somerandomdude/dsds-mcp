@@ -44,12 +44,34 @@ function rulesFromPlugin(prefix, plugin) {
   return rules;
 }
 
+// Returns filenames that look like stubs: JSX/TSX files with no JSX elements in the body.
+// Design-system rules only fire on actual JSX, so linting stubs produces no useful signal.
+function detectStubFiles(filesToLint) {
+  const stubs = [];
+  for (const file of filesToLint) {
+    const filename = file.filename ?? 'Component.tsx';
+    if (!/\.[jt]sx$/.test(filename)) continue;
+    // Strip import lines, then check for any JSX element syntax
+    const withoutImports = (file.code ?? '').replace(
+      /^\s*import\s[\s\S]*?from\s['"][^'"]+['"]\s*;?\s*$/gm,
+      '',
+    );
+    if (!/<[A-Za-z]/.test(withoutImports)) {
+      stubs.push(filename);
+    }
+  }
+  return stubs;
+}
+
 export const lintCodeDef = {
   name: 'dsds_lint_code',
   description:
     'Lint code against the configured ESLint plugins. ' +
     'Use the `files` array to lint ALL generated files in one call — this is the preferred usage. ' +
-    'Returns violations with rule ID, severity, location, and message, grouped by file.',
+    'Returns violations with rule ID, severity, location, and message, grouped by file. ' +
+    'IMPORTANT: Only lint complete implementations. Design-system rules fire on JSX elements — ' +
+    'stub files that return null or contain no JSX will produce no design-system violations, ' +
+    'giving a false all-clear. Always call this tool after writing your final component code.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -207,6 +229,9 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
     cwd: resolveDir,
   });
 
+  // Warn the agent if it submitted stub files (no JSX → design-system rules won't fire)
+  const stubFiles = detectStubFiles(filesToLint);
+
   // Lint all files
   const fileResults = [];
   for (const file of filesToLint) {
@@ -288,6 +313,18 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
         lines.push('');
       }
     }
+  }
+
+  if (stubFiles.length > 0) {
+    lines.push(
+      '---',
+      '',
+      `> ⚠️ **${stubFiles.length} stub file${stubFiles.length === 1 ? '' : 's'} detected** — no JSX elements found in: ${stubFiles.map(f => `\`${f}\``).join(', ')}`,
+      '>',
+      '> Design-system ESLint rules only fire on actual JSX. These files produced no design-system violations because they contain no rendered components.',
+      '> **Call \`dsds_lint_code\` again after completing your implementation.**',
+      '',
+    );
   }
 
   if (loadErrors.length > 0) {
