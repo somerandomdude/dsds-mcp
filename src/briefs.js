@@ -45,25 +45,33 @@ If you are unsure what exists, search broadly first, then narrow.
 
 ---
 
-### Step 3 — Read the full spec for every entity you plan to use
+### Step 3 — Check for applicable patterns
 
-For each entity, call \`dsds_get_entity\` and review every document block.
-Do not assume — read the actual documentation.
+Call \`dsds_search_entities\` with \`kind=pattern\` to find patterns that may already document the layout or interaction flow you are about to build.
 
-Key blocks to check for components:
-- **\`api\`** — all properties, events, slots, CSS custom properties, and data attributes
-- **\`variants\`** — option axes (e.g. emphasis: primary | secondary | ghost)
-- **\`states\`** — how the component behaves in hover, focus, disabled, loading, etc.
-- **\`accessibility\`** — WCAG level, keyboard interactions, required ARIA attributes
-- **\`guidelines\`** — enforced rules (look for \`MUST\` and \`MUST_NOT\` entries, and \`criteria\` you can check against)
-- **\`imports\`** — exact package paths and framework snippets
-
-If you only need one section, use \`dsds_get_document_block(identifier, blockType)\`
-instead of fetching the full entity.
+If a pattern matches your task, read it with \`dsds_get_entity\` before composing anything from primitives. A documented pattern tells you the correct component combinations, required props, and rules the design system team has already worked out.
 
 ---
 
-### Step 4 — Use tokens, not hardcoded values
+### Step 4 — Read the documentation for every entity you plan to use
+
+Use the following lookup order — stop as soon as you have what you need:
+
+1. **\`dsds_get_agent_context(identifier)\`** — start here for every component.
+   Returns the agent-optimized view: generation rules, anti-patterns, prop table, use-case
+   disambiguation, and all guidelines. This is the primary lookup for building.
+
+2. **\`dsds_get_document_block(identifier, blockType)\`** — use when you need one specific
+   section that \`dsds_get_agent_context\` did not cover (e.g. \`accessibility\` for WCAG
+   details, \`variants\` for the full option matrix, \`states\` for interaction behaviour).
+   Faster and cheaper than fetching the whole entity.
+
+3. **\`dsds_get_entity(identifier)\`** — use only when you need the raw, complete entity
+   including all blocks in their original JSON structure. Prefer the two calls above.
+
+---
+
+### Step 5 — Use tokens, not hardcoded values
 
 Call \`dsds_search_entities\` with \`kind=token\` or \`kind=token-group\` to find
 the design tokens that apply to your work.
@@ -73,20 +81,11 @@ token identifier from the design system.
 
 ---
 
-### Step 5 — Check for applicable patterns
+### Step 6 — Check for an applicable chunk
 
-Call \`dsds_search_entities\` with \`kind=pattern\` to find patterns that may
-already define the interaction flow you're about to implement.
+Call \`dsds_search_entities\` with \`kind=chunk\` to find pre-assembled code that may cover your use case.
 
-Using an existing pattern is always preferable to inventing a new one.
-
----
-
-### Step 6 — Check for an applicable theme
-
-If the design system has themes (dark mode, high-contrast, brand variants),
-call \`dsds_search_entities\` with \`kind=theme\` and verify your implementation
-works within those contexts.
+If a chunk matches, call \`dsds_get_chunk(identifier)\` to retrieve the full code and its guidelines. Chunks are production-ready compositions — copy the code directly rather than assembling the same pattern from scratch.
 
 ---
 

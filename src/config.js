@@ -28,15 +28,36 @@ export function loadConfig() {
   const rawLintResolveDir = process.env['LINT_RESOLVE_DIR'];
   const lintResolveDir = rawLintResolveDir ? expandHome(rawLintResolveDir.trim()) : process.cwd();
 
-  const rawIntro = process.env['DSDS_INTRO_PATH'];
+  // DSDS_INTRO_PATHS accepts comma-separated paths; DSDS_INTRO_PATH is the legacy single-path alias.
+  const rawIntros = process.env['DSDS_INTRO_PATHS'] ?? process.env['DSDS_INTRO_PATH'];
+  const introPaths = rawIntros
+    ? rawIntros.split(',').map(p => expandHome(p.trim())).filter(Boolean)
+    : [];
   const rawFeedbackDir = process.env['DSDS_FEEDBACK_DIR'];
   const rawLogsDir = process.env['DSDS_LOGS_DIR'];
+
+  // PACKAGE_EXPORT_PATHS: comma-separated "packageName=packagePath" pairs.
+  // Example: @sanity-labs/ui-poc=/path/to/ui-poc/packages/ui,@sanity/ui=/path/to/sanity-ui/packages/ui
+  const rawExportPaths = process.env['PACKAGE_EXPORT_PATHS'];
+  const packageExportPaths = new Map();
+  if (rawExportPaths) {
+    for (const entry of rawExportPaths.split(',').map(s => s.trim()).filter(Boolean)) {
+      const eqIdx = entry.indexOf('=');
+      if (eqIdx > 0) {
+        const pkgName = entry.slice(0, eqIdx).trim();
+        const pkgPath = expandHome(entry.slice(eqIdx + 1).trim());
+        if (pkgName && pkgPath) packageExportPaths.set(pkgName, pkgPath);
+      }
+    }
+  }
+
   return {
     paths,
     lintPaths,
     lintPlugins,
     lintResolveDir,
-    introPath: rawIntro ? expandHome(rawIntro.trim()) : null,
+    introPaths,
+    packageExportPaths,
     feedbackDir: rawFeedbackDir ? expandHome(rawFeedbackDir.trim()) : resolve(__dirname, '../feedback'),
     logsDir: rawLogsDir ? expandHome(rawLogsDir.trim()) : resolve(__dirname, '../logs'),
     schemaVersion: process.env['DSDS_SCHEMA_VERSION'] ?? '0.10.0',

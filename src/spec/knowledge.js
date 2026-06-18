@@ -1,7 +1,7 @@
-// Static spec knowledge derived from the DSDS 0.7 schema.
+// Static spec knowledge derived from the DSDS 0.11.0 schema.
 // Used by spec tools to describe entities and document blocks without parsing the full schema at runtime.
 
-export const ENTITY_KINDS = ['component', 'guide', 'pattern', 'foundation', 'theme', 'token', 'token-group'];
+export const ENTITY_KINDS = ['component', 'guide', 'pattern', 'foundation', 'theme', 'token', 'token-group', 'chunk'];
 
 export const ENTITY_DESCRIPTIONS = {
   component: {
@@ -45,6 +45,12 @@ export const ENTITY_DESCRIPTIONS = {
     required: ['kind', 'identifier'],
     optionalTop: ['description', 'tokenType', 'source', 'children', 'metadata', 'documentBlocks', 'agentDocumentBlocks', '$extensions'],
     notes: 'children is an array of token or token-group entities. tokenType can be set at the group level and inherited by children.',
+  },
+  chunk: {
+    summary: 'A pre-composed block of code capturing a design system pattern — a copy-paste starting point built from the system\'s components.',
+    required: ['kind', 'identifier', 'name', 'code'],
+    optionalTop: ['description', 'guidelines', 'useCases', 'metadata', '$extensions'],
+    notes: 'Chunks are intentionally simple: no documentBlocks. The `code` object has two forms: inline (`code` + `language`) or referenced (`src` + `language`, where `src` is a path relative to the chunk file). The `guidelines` and `useCases` arrays live directly on the entity (not inside documentBlocks). Use `metadata.links` to reference the components this chunk composes.',
   },
 };
 
@@ -140,16 +146,15 @@ export const METADATA_FIELDS = {
   links: 'Typed links to external resources or internal artifacts: { kind, url?, identifier?, label?, role?, required? }. External kinds: source, design, storybook, documentation, package, repository. Relationship kinds: alternative, parent, child, related. Artifact kinds: component, token, token-group, foundation, pattern, theme.',
 };
 
-// NOTE: `description` is NOT metadata in v0.7 — it is a top-level entity
-// property beside `identifier` and `name`.
+// NOTE: `description` is NOT metadata — it is a top-level entity property beside `identifier` and `name`.
 
 // Minimal scaffolds per entity kind
-const SCHEMA_URL = 'https://designsystemdocspec.org/v0.7/dsds.bundled.schema.json';
+const SCHEMA_URL = 'https://designsystemdocspec.org/v0.11.0/dsds.bundled.schema.json';
 
 export const SCAFFOLDS = {
   component: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.7',
+    dsdsVersion: '0.11.0',
     entity: {
       kind: 'component',
       identifier: 'my-component',
@@ -161,7 +166,7 @@ export const SCAFFOLDS = {
   },
   guide: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.7',
+    dsdsVersion: '0.11.0',
     entity: {
       kind: 'guide',
       identifier: 'my-guide',
@@ -173,7 +178,7 @@ export const SCAFFOLDS = {
   },
   pattern: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.7',
+    dsdsVersion: '0.11.0',
     entity: {
       kind: 'pattern',
       identifier: 'my-pattern',
@@ -185,7 +190,7 @@ export const SCAFFOLDS = {
   },
   foundation: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.7',
+    dsdsVersion: '0.11.0',
     entity: {
       kind: 'foundation',
       identifier: 'my-foundation',
@@ -197,7 +202,7 @@ export const SCAFFOLDS = {
   },
   theme: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.7',
+    dsdsVersion: '0.11.0',
     entity: {
       kind: 'theme',
       identifier: 'my-theme',
@@ -210,7 +215,7 @@ export const SCAFFOLDS = {
   },
   token: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.7',
+    dsdsVersion: '0.11.0',
     entity: {
       kind: 'token',
       identifier: 'color-text-primary',
@@ -222,7 +227,7 @@ export const SCAFFOLDS = {
   },
   'token-group': {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.7',
+    dsdsVersion: '0.11.0',
     entity: {
       kind: 'token-group',
       identifier: 'color-text',
@@ -232,9 +237,24 @@ export const SCAFFOLDS = {
       documentBlocks: [],
     },
   },
+  chunk: {
+    $schema: SCHEMA_URL,
+    dsdsVersion: '0.11.0',
+    entity: {
+      kind: 'chunk',
+      identifier: 'my-chunk',
+      name: 'My Chunk',
+      description: 'Describe what pattern this chunk captures and which components it composes.',
+      code: {
+        language: 'tsx',
+        code: '// Your pre-composed starting point here',
+      },
+      metadata: { status: 'stable', tags: [] },
+    },
+  },
   system: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.7',
+    dsdsVersion: '0.11.0',
     systemInfo: {
       systemName: 'My Design System',
       systemVersion: '1.0.0',

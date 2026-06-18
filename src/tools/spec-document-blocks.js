@@ -1,16 +1,19 @@
 import { ENTITY_KINDS, DOCUMENT_BLOCK_DESCRIPTIONS, VALID_BLOCKS_BY_KIND } from '../spec/knowledge.js';
 import { getUpdateNotice } from '../spec/version.js';
 
+// Chunks don't use documentBlocks — their guidelines/useCases are top-level.
+const DOCUMENT_BLOCK_KINDS = ENTITY_KINDS.filter(k => k !== 'chunk');
+
 export const specDocumentBlocksDef = {
   name: 'dsds_spec_document_blocks',
   description:
-    'List the document block types available for a DSDS entity kind, with descriptions of what each block captures.',
+    'List the document block types available for a DSDS entity kind, with descriptions of what each block captures. Not applicable to chunks — use dsds_spec_entity_schema for chunk field details.',
   inputSchema: {
     type: 'object',
     properties: {
       kind: {
         type: 'string',
-        enum: ENTITY_KINDS,
+        enum: DOCUMENT_BLOCK_KINDS,
         description: 'The entity kind to list document blocks for.',
       },
     },
@@ -23,7 +26,7 @@ export async function specDocumentBlocksHandler({ kind }) {
   if (!validBlocks) {
     return {
       isError: true,
-      content: [{ type: 'text', text: `Unknown entity kind "${kind}". Valid kinds: ${ENTITY_KINDS.join(', ')}` }],
+      content: [{ type: 'text', text: `Unknown entity kind "${kind}". Valid kinds: ${DOCUMENT_BLOCK_KINDS.join(', ')}` }],
     };
   }
 

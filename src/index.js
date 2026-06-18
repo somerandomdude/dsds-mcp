@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadConfig } from './config.js';
-import { loadSystems, summarizeEntities, loadIntroEntity } from './loader.js';
+import { loadSystems, summarizeEntities, loadIntroEntities } from './loader.js';
 import { createServer } from './server.js';
 import { startUpdateCheck } from './spec/version.js';
 import { startWatching } from './watcher.js';
@@ -9,9 +9,9 @@ import { startWatching } from './watcher.js';
 async function main() {
   const config = loadConfig();
 
-  const [{ systems, errors }, introEntity] = await Promise.all([
+  const [{ systems, errors }, introEntities] = await Promise.all([
     loadSystems(config.paths),
-    loadIntroEntity(config.introPath),
+    loadIntroEntities(config.introPaths),
   ]);
 
   // Startup diagnostics — always written to stderr so client logs show the state
@@ -42,12 +42,22 @@ async function main() {
   };
 
   const getLintConfig = () => ({ plugins: config.lintPlugins, resolveDir: config.lintResolveDir });
+  const getExportPaths = () => config.packageExportPaths;
+
+  if (config.packageExportPaths.size > 0) {
+    process.stderr.write(`[dsds-mcp] Export paths: ${[...config.packageExportPaths.keys()].join(', ')}\n`);
+  }
+
+  if (introEntities.length > 0) {
+    process.stderr.write(`[dsds-mcp] Loaded ${introEntities.length} intro entit${introEntities.length === 1 ? 'y' : 'ies'}: ${introEntities.map(e => e.identifier).join(', ')}\n`);
+  }
 
   const server = createServer(
     () => state.systems,
     () => state.summaries,
-    introEntity,
+    introEntities,
     getLintConfig,
+    getExportPaths,
     config.feedbackDir,
     config.logsDir,
   );

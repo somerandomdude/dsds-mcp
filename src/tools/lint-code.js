@@ -2,6 +2,23 @@ import { createRequire } from 'node:module';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { mkdir, appendFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+
+// Session-level lint result cache. An agent can pass { cacheKey, filename } instead of
+// { code, filename } on subsequent calls to avoid re-sending unchanged file content.
+// Cache key = first 12 hex chars of SHA-256(source). LRU eviction at MAX_CACHE entries.
+const MAX_CACHE = 200;
+const lintCache = new Map();
+
+function computeCacheKey(code) {
+  return createHash('sha256').update(code).digest('hex').slice(0, 12);
+}
+
+function storeCacheEntry(key, result) {
+  if (lintCache.has(key)) lintCache.delete(key); // refresh insertion order
+  if (lintCache.size >= MAX_CACHE) lintCache.delete(lintCache.keys().next().value);
+  lintCache.set(key, result);
+}
 
 function pluginPrefix(packageName) {
   const scoped = packageName.match(/^(@[^/]+)\/eslint-plugin(?:-(.+))?$/);
@@ -49,6 +66,7 @@ function rulesFromPlugin(prefix, plugin) {
 function detectStubFiles(filesToLint) {
   const stubs = [];
   for (const file of filesToLint) {
+    if (!file.code) continue; // cache-only entries were already linted — skip
     const filename = file.filename ?? 'Component.tsx';
     if (!/\.[jt]sx$/.test(filename)) continue;
     // Strip import lines, then check for any JSX element syntax
@@ -63,12 +81,20 @@ function detectStubFiles(filesToLint) {
   return stubs;
 }
 
+function inferLanguage(filename) {
+  if (filename.endsWith('.tsx')) return 'tsx';
+  if (filename.endsWith('.ts')) return 'ts';
+  if (filename.endsWith('.jsx')) return 'jsx';
+  return 'js';
+}
+
 export const lintCodeDef = {
   name: 'dsds_lint_code',
   description:
     'Lint code against the configured ESLint plugins. ' +
+    'Auto-applies all fixable violations and returns the corrected code — copy the corrected code directly into your files. ' +
+    'Returns remaining violations that require manual edits alongside the corrected code. ' +
     'Use the `files` array to lint ALL generated files in one call — this is the preferred usage. ' +
-    'Returns violations with rule ID, severity, location, and message, grouped by file. ' +
     'IMPORTANT: Only lint complete implementations. Design-system rules fire on JSX elements — ' +
     'stub files that return null or contain no JSX will produce no design-system violations, ' +
     'giving a false all-clear. Always call this tool after writing your final component code.',
@@ -79,13 +105,14 @@ export const lintCodeDef = {
         type: 'array',
         description:
           'Batch mode: lint multiple files at once. Pass every file you generated. ' +
-          'Each entry needs `code` (required) and `filename` (optional, defaults to Component.tsx).',
+          'Each entry needs either `code` (full source) or `cacheKey` (from a previous call). ' +
+          'Pass `cacheKey` instead of `code` for files that have not changed since the last lint call.',
         items: {
           type: 'object',
-          required: ['code'],
           properties: {
-            code:     { type: 'string', description: 'Source code to lint.' },
+            code:     { type: 'string', description: 'Source code to lint. Required unless `cacheKey` is provided.' },
             filename: { type: 'string', description: "Filename for parser inference (e.g. 'App.tsx')." },
+            cacheKey: { type: 'string', description: 'Cache key from a previous dsds_lint_code call. Pass this instead of `code` to skip re-sending unchanged file content.' },
           },
         },
       },
@@ -97,13 +124,17 @@ export const lintCodeDef = {
         type: 'string',
         description: "Single-file mode: filename for parser inference (e.g. 'Component.tsx'). Defaults to Component.tsx.",
       },
+      cacheKey: {
+        type: 'string',
+        description: 'Single-file mode: cache key from a previous call. Pass this instead of `code` to skip re-sending unchanged file content.',
+      },
     },
   },
 };
 
 async function writeLintLog(logsDir, fileResults) {
-  const violations = fileResults.filter(f => f.messages?.length > 0);
-  if (violations.length === 0) return;
+  const relevant = fileResults.filter(f => f.messages?.length > 0 || f.fixed);
+  if (relevant.length === 0) return;
 
   try {
     await mkdir(logsDir, { recursive: true });
@@ -112,10 +143,12 @@ async function writeLintLog(logsDir, fileResults) {
     const entry = {
       timestamp: new Date().toISOString(),
       filesLinted: fileResults.length,
-      totalViolations: fileResults.reduce((n, f) => n + (f.messages?.length ?? 0), 0),
-      files: violations.map(f => ({
+      filesFixed: fileResults.filter(f => f.fixed).length,
+      totalRemainingViolations: fileResults.reduce((n, f) => n + (f.messages?.length ?? 0), 0),
+      files: relevant.map(f => ({
         filename: f.filename,
-        violations: f.messages.map(m => ({
+        fixed: f.fixed ?? false,
+        violations: (f.messages ?? []).map(m => ({
           ruleId: m.ruleId ?? null,
           severity: m.severity,
           line: m.line,
@@ -131,17 +164,17 @@ async function writeLintLog(logsDir, fileResults) {
 }
 
 export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
-  // Normalise input: batch `files` array takes priority over single `code`.
+  // Normalise input: batch `files` array takes priority over single code/cacheKey.
   const filesToLint = args.files?.length
     ? args.files
-    : args.code != null
-      ? [{ code: args.code, filename: args.filename }]
+    : args.code != null || args.cacheKey != null
+      ? [{ code: args.code, filename: args.filename, cacheKey: args.cacheKey }]
       : null;
 
   if (!filesToLint) {
     return {
       isError: true,
-      content: [{ type: 'text', text: 'Provide either `files` (array) or `code` (string).' }],
+      content: [{ type: 'text', text: 'Provide either `files` (array), `code` (string), or `cacheKey` (from a previous call).' }],
     };
   }
 
@@ -223,10 +256,12 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
     }
   }
 
+  // fix: true — auto-apply all fixable violations; result.output holds the corrected code.
   const eslint = new ESLint({
     overrideConfigFile: true,
     overrideConfig,
     cwd: resolveDir,
+    fix: true,
   });
 
   // Warn the agent if it submitted stub files (no JSX → design-system rules won't fire)
@@ -236,22 +271,50 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
   const fileResults = [];
   for (const file of filesToLint) {
     const filename = file.filename ?? 'Component.tsx';
+
+    // Cache hit: agent passed a key from a previous call — return stored result.
+    if (file.cacheKey && !file.code) {
+      const cached = lintCache.get(file.cacheKey);
+      if (!cached) {
+        fileResults.push({
+          filename, messages: [], fixedCode: null, fixed: false, cacheKey: null,
+          error: `Cache miss for key "${file.cacheKey}". Re-send this file with full \`code\`.`,
+        });
+      } else {
+        fileResults.push({ ...cached, filename });
+      }
+      continue;
+    }
+
+    if (!file.code) {
+      fileResults.push({
+        filename, messages: [], fixedCode: null, fixed: false, cacheKey: null,
+        error: 'Provide either `code` (source) or `cacheKey` (from a previous dsds_lint_code call).',
+      });
+      continue;
+    }
+
     const filePath = resolve(resolveDir, filename);
     try {
       const results = await eslint.lintText(file.code, { filePath });
-      const messages = results.flatMap(r =>
-        r.messages.map(m => ({
-          ruleId: m.ruleId,
-          severity: m.severity,
-          message: m.message,
-          line: m.line,
-          column: m.column,
-          fix: !!m.fix,
-        }))
-      );
-      fileResults.push({ filename, messages });
+      const r = results[0];
+      // output is only set when at least one fix was applied
+      const fixedCode = r?.output ?? null;
+      const fixed = fixedCode !== null;
+      const messages = (r?.messages ?? []).map(m => ({
+        ruleId: m.ruleId,
+        severity: m.severity,
+        message: m.message,
+        line: m.line,
+        column: m.column,
+        fix: !!m.fix,
+      }));
+      const cacheKey = computeCacheKey(file.code);
+      const result = { filename, messages, fixedCode, fixed, cacheKey };
+      storeCacheEntry(cacheKey, result);
+      fileResults.push(result);
     } catch (err) {
-      fileResults.push({ filename, error: err.message });
+      fileResults.push({ filename, error: err.message, messages: [], fixedCode: null, fixed: false, cacheKey: null });
     }
   }
 
@@ -262,55 +325,105 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
   const lines = [];
   const isBatch = filesToLint.length > 1;
 
-  const totalIssues = fileResults.reduce((n, f) => n + (f.messages?.length ?? 0), 0);
-  const filesWithIssues = fileResults.filter(f => f.messages?.length > 0 || f.error).length;
-  const filesClean = fileResults.filter(f => !f.error && f.messages?.length === 0).length;
+  const totalRemaining = fileResults.reduce((n, f) => n + (f.messages?.length ?? 0), 0);
+  const filesFixed = fileResults.filter(f => f.fixed).length;
+  const filesWithErrors = fileResults.filter(f => f.error).length;
+  const filesClean = fileResults.filter(f => !f.error && !f.fixed && f.messages?.length === 0).length;
+  const filesAutoFixedClean = fileResults.filter(f => f.fixed && f.messages?.length === 0).length;
+  const filesWithRemaining = fileResults.filter(f => f.messages?.length > 0).length;
 
   if (isBatch) {
-    if (totalIssues === 0 && !fileResults.some(f => f.error)) {
+    const allClean = totalRemaining === 0 && !fileResults.some(f => f.error);
+    if (allClean && filesFixed === 0) {
       lines.push(`All ${fileResults.length} files lint clean.`);
-    } else {
+    } else if (allClean && filesFixed > 0) {
       lines.push(
-        `## Lint results — ${fileResults.length} file${fileResults.length === 1 ? '' : 's'}, ` +
-        `${totalIssues} issue${totalIssues === 1 ? '' : 's'} ` +
-        `(${filesClean} clean, ${filesWithIssues} with issues)`,
+        `All ${fileResults.length} files lint clean after auto-fix. ` +
+        `Apply the corrected code for ${filesFixed} file${filesFixed === 1 ? '' : 's'} below.`,
         '',
       );
-      for (const f of fileResults) {
-        if (f.error) {
-          lines.push(`### \`${f.filename}\` — ESLint error`, '', f.error, '');
-          continue;
-        }
-        if (f.messages.length === 0) {
-          lines.push(`### \`${f.filename}\` — clean`, '');
-          continue;
-        }
-        lines.push(`### \`${f.filename}\` — ${f.messages.length} issue${f.messages.length === 1 ? '' : 's'}`, '');
+    } else {
+      const parts = [];
+      if (filesFixed > 0) parts.push(`${filesFixed} auto-fixed`);
+      if (filesClean > 0) parts.push(`${filesClean} clean`);
+      if (filesWithRemaining > 0) parts.push(`${filesWithRemaining} with remaining violations`);
+      if (filesWithErrors > 0) parts.push(`${filesWithErrors} error`);
+      lines.push(
+        `## Lint results — ${fileResults.length} file${fileResults.length === 1 ? '' : 's'} (${parts.join(', ')}), ` +
+        `${totalRemaining} remaining violation${totalRemaining === 1 ? '' : 's'}`,
+        '',
+      );
+    }
+
+    for (const f of fileResults) {
+      if (f.error) {
+        lines.push(`### \`${f.filename}\` — ESLint error`, '', f.error, '');
+        continue;
+      }
+
+      const lang = inferLanguage(f.filename);
+
+      if (f.fixed && f.messages.length === 0) {
+        lines.push(`### \`${f.filename}\` — all violations auto-fixed`, '');
+        lines.push('**Corrected code:**', '');
+        lines.push('```' + lang, f.fixedCode, '```', '');
+        continue;
+      }
+
+      if (f.fixed && f.messages.length > 0) {
+        lines.push(`### \`${f.filename}\` — ${f.messages.length} remaining violation${f.messages.length === 1 ? '' : 's'} (auto-fixes applied)`, '');
+        lines.push('**Corrected code** (apply this, then address the remaining violations below):', '');
+        lines.push('```' + lang, f.fixedCode, '```', '');
+        lines.push('**Remaining violations:**', '');
         for (const m of f.messages) {
           const sev = m.severity === 2 ? 'error' : 'warn';
-          lines.push(`#### \`${m.ruleId ?? 'unknown'}\` [${sev}] — line ${m.line}, col ${m.column}`);
-          lines.push('');
-          lines.push(m.message);
-          if (m.fix) lines.push('', '**Auto-fixable.**');
-          lines.push('');
+          lines.push(`#### \`${m.ruleId ?? 'unknown'}\` [${sev}] — line ${m.line}, col ${m.column}`, '');
+          lines.push(m.message, '');
         }
+        continue;
+      }
+
+      if (f.messages.length === 0) {
+        lines.push(`### \`${f.filename}\` — clean`, '');
+        continue;
+      }
+
+      lines.push(`### \`${f.filename}\` — ${f.messages.length} violation${f.messages.length === 1 ? '' : 's'}`, '');
+      for (const m of f.messages) {
+        const sev = m.severity === 2 ? 'error' : 'warn';
+        lines.push(`#### \`${m.ruleId ?? 'unknown'}\` [${sev}] — line ${m.line}, col ${m.column}`, '');
+        lines.push(m.message, '');
       }
     }
   } else {
-    // Single-file output (same format as before)
-    const { filename, messages, error } = fileResults[0];
+    // Single-file output
+    const { filename, messages, fixedCode, fixed, error } = fileResults[0];
+    const lang = inferLanguage(filename);
+
     if (error) {
       lines.push(`ESLint error: ${error}`);
-    } else if (messages.length === 0) {
-      lines.push('No lint issues found.');
-    } else {
-      lines.push(`## Lint results — ${messages.length} issue${messages.length === 1 ? '' : 's'}`, '');
+    } else if (fixed && messages.length === 0) {
+      lines.push('All violations were auto-fixed.', '');
+      lines.push('**Corrected code:**', '');
+      lines.push('```' + lang, fixedCode, '```');
+    } else if (fixed && messages.length > 0) {
+      lines.push(`## Lint results — ${messages.length} remaining violation${messages.length === 1 ? '' : 's'} (auto-fixes applied)`, '');
+      lines.push('**Corrected code** (apply this, then address the remaining violations below):', '');
+      lines.push('```' + lang, fixedCode, '```', '');
+      lines.push('**Remaining violations:**', '');
       for (const m of messages) {
         const sev = m.severity === 2 ? 'error' : 'warn';
         lines.push(`### \`${m.ruleId ?? 'unknown'}\` [${sev}] — line ${m.line}, col ${m.column}`, '');
-        lines.push(m.message);
-        if (m.fix) lines.push('', '**Auto-fixable.**');
-        lines.push('');
+        lines.push(m.message, '');
+      }
+    } else if (messages.length === 0) {
+      lines.push('No lint issues found.');
+    } else {
+      lines.push(`## Lint results — ${messages.length} violation${messages.length === 1 ? '' : 's'}`, '');
+      for (const m of messages) {
+        const sev = m.severity === 2 ? 'error' : 'warn';
+        lines.push(`### \`${m.ruleId ?? 'unknown'}\` [${sev}] — line ${m.line}, col ${m.column}`, '');
+        lines.push(m.message, '');
       }
     }
   }
@@ -322,13 +435,25 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
       `> ⚠️ **${stubFiles.length} stub file${stubFiles.length === 1 ? '' : 's'} detected** — no JSX elements found in: ${stubFiles.map(f => `\`${f}\``).join(', ')}`,
       '>',
       '> Design-system ESLint rules only fire on actual JSX. These files produced no design-system violations because they contain no rendered components.',
-      '> **Call \`dsds_lint_code\` again after completing your implementation.**',
+      '> **Call `dsds_lint_code` again after completing your implementation.**',
       '',
     );
   }
 
   if (loadErrors.length > 0) {
     lines.push('---', '', `> ${loadErrors.length} plugin(s) failed to load: ${loadErrors.join(', ')}`);
+  }
+
+  // Cache key hints — only for entries that were freshly linted (have a cacheKey)
+  const freshResults = fileResults.filter(f => f.cacheKey);
+  if (freshResults.length === 1) {
+    lines.push('', `**Cache key:** \`${freshResults[0].cacheKey}\` — pass \`{ cacheKey: "${freshResults[0].cacheKey}", filename: "${freshResults[0].filename}" }\` instead of \`code\` on subsequent calls **only if this file has not changed**. If you modify the file, always pass the updated \`code\` — the cache key is tied to the exact source content linted above.`);
+  } else if (freshResults.length > 1) {
+    lines.push('', '---', '', '**Cache keys** — only valid while these files remain unchanged. If you modify a file, re-send its full `code` instead of the cache key:', '');
+    for (const f of freshResults) {
+      lines.push(`- \`${f.filename}\` → \`${f.cacheKey}\``);
+    }
+    lines.push('');
   }
 
   return { content: [{ type: 'text', text: lines.join('\n') }] };

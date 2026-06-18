@@ -8,7 +8,7 @@ Two use cases:
 
 The DSDS spec is bundled at the version listed below. The server checks for updates on startup and surfaces a notice in tool responses when a newer version is available.
 
-**Bundled spec version:** 0.7
+**Bundled spec version:** 0.10.2
 
 ---
 
@@ -65,8 +65,11 @@ Configuration is done via environment variables passed through your MCP client c
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DSDS_PATHS` | No | Comma-separated paths to your DSDS file(s). Required for design system access tools. |
-| `DSDS_INTRO_PATH` | No | Path to a single DSDS file loaded as the design system introduction. Its content is prepended to the server instructions and exposed as a `dsds-intro` prompt. |
-| `DSDS_SCHEMA_VERSION` | No | Override the spec version string. Defaults to `0.7`. |
+| `PACKAGE_EXPORT_PATHS` | No | Comma-separated `packageName=path` pairs pointing to each package root. Used by `dsds_check_exports` to verify components exist before importing. See below. |
+| `DSDS_INTRO_PATHS` | No | Comma-separated paths to DSDS files loaded as design system introductions. Content from each entity is prepended to the server instructions and exposed via the `dsds-intro` prompt. `DSDS_INTRO_PATH` (singular) still works as a single-path alias. |
+| `DSDS_SCHEMA_VERSION` | No | Override the spec version string. Defaults to `0.10.2`. |
+| `DSDS_FEEDBACK_DIR` | No | Directory where session feedback from `dsds_feedback` is written. Defaults to `feedback/` inside the dsds-mcp directory. |
+| `DSDS_LOGS_DIR` | No | Directory where `dsds_lint_code` writes per-session lint logs. Defaults to `logs/` inside the dsds-mcp directory. |
 | `LINT_PLUGINS` | No | Comma-separated ESLint plugin package names to use with `dsds_lint_code`. Plugins are resolved from `LINT_RESOLVE_DIR`. |
 | `LINT_RESOLVE_DIR` | No | Absolute path to the project where your ESLint plugins are installed. Defaults to the current working directory. |
 
@@ -92,11 +95,11 @@ Multiple files:
 "DSDS_PATHS": "/path/to/components.dsds.json,/path/to/tokens.dsds.json"
 ```
 
-### Loading an intro file on startup
+### Loading intro files on startup
 
-`DSDS_INTRO_PATH` loads a single DSDS file when the server starts. The entity's content is injected into the MCP server instructions so agents see it before any tool call. It also registers a `dsds-intro` prompt that clients can retrieve on demand.
+`DSDS_INTRO_PATHS` loads one or more DSDS files when the server starts. Each entity's content is injected into the MCP server instructions so agents see it before any tool call. It also registers a `dsds-intro` prompt that clients can retrieve on demand.
 
-Use this for a top-level system overview, a getting-started guide, or any entity you want agents to have as immediate context.
+Use this for a top-level system overview, a getting-started guide, or any reference you want agents to have as immediate context — without them needing to call a tool first.
 
 ```json
 {
@@ -106,18 +109,22 @@ Use this for a top-level system overview, a getting-started guide, or any entity
       "args": ["dsds-mcp"],
       "env": {
         "DSDS_PATHS": "/path/to/my-design-system.dsds.json",
-        "DSDS_INTRO_PATH": "/path/to/my-design-system.dsds.json"
+        "DSDS_INTRO_PATHS": "/path/to/overview.dsds.json, /path/to/agent-reference.dsds.json"
       }
     }
   }
 }
 ```
 
-`DSDS_INTRO_PATH` can point to any file already listed in `DSDS_PATHS`, or to a separate overview document not included in the main file set.
+Each path can point to any file already in `DSDS_PATHS`, or to a separate document not included in the main file set.
+
+The server renders content from both `documentBlocks` and `agentDocumentBlocks` when building the instructions text. Entities with `agentDocumentBlocks` will have their agent-optimized guidelines and sections included directly.
+
+`DSDS_INTRO_PATH` (singular) still works as a backward-compatible alias for a single path.
 
 ### Linting code with ESLint plugins
 
-`dsds_lint_code` runs ESLint against a code snippet using any plugins installed in your project. This lets an agent validate component code against your design system's lint rules before finishing a task.
+`dsds_lint_code` runs ESLint against one or more code files using plugins installed in your project. It auto-applies all fixable violations and returns the corrected code alongside any remaining violations that need manual edits. This lets an agent validate and fix component code against your design system's lint rules before finishing a task.
 
 **Prerequisites:**
 
@@ -162,11 +169,66 @@ The MCP uses each plugin's `configs.recommended` ruleset if it exports one. If t
 
 **Usage by an agent:**
 
+Prefer the `files` array to lint all generated files in one call:
+
+```
+dsds_lint_code(files=[
+  { code: "<component tsx>", filename: "Card.tsx" },
+  { code: "<app tsx>", filename: "App.tsx" }
+])
+```
+
+Single file:
+
 ```
 dsds_lint_code(code="<jsx string>", filename="Component.tsx")
 ```
 
-The `filename` parameter is used for parser inference (`.tsx` vs `.js`, etc.). It defaults to `Component.tsx`.
+The `filename` parameter drives parser inference (`.tsx` vs `.js`, etc.). It defaults to `Component.tsx`.
+
+When fixes are applied, the tool returns the corrected code directly — copy it back into your files. Remaining violations (those without an autofix) are listed after the corrected code.
+
+### Checking package exports
+
+`dsds_check_exports` verifies that specific components are actually exported from their packages before your agent imports them. This catches the common case where docs describe a component as `draft` (not yet shipped) and the agent tries to import it anyway.
+
+**Configuration:**
+
+```json
+{
+  "mcpServers": {
+    "dsds": {
+      "command": "npx",
+      "args": ["dsds-mcp"],
+      "env": {
+        "DSDS_PATHS": "/path/to/my-design-system.dsds.json",
+        "PACKAGE_EXPORT_PATHS": "@sanity-labs/ui-poc=/path/to/ui-poc/packages/ui"
+      }
+    }
+  }
+}
+```
+
+Multiple packages (comma-separated):
+
+```json
+"PACKAGE_EXPORT_PATHS": "@sanity-labs/ui-poc=/path/to/ui-poc/packages/ui,@sanity/ui=/path/to/sanity-ui/packages/ui"
+```
+
+Each path should point to the package root (the directory containing `package.json`). The tool reads `dist/index.d.ts` if present, or falls back to `src/index.ts`.
+
+**Usage by an agent:**
+
+```
+dsds_check_exports(components=["Box", "TextInput", "Badge"])
+```
+
+Returns:
+```
+✓ Box — exported from `@sanity-labs/ui-poc`
+✗ TextInput — not found in `@sanity-labs/ui-poc`
+✓ Badge — exported from `@sanity/ui`
+```
 
 ---
 
@@ -206,20 +268,38 @@ These let agents query an existing DSDS document.
 | `dsds_context_brief` | **Start here.** Use `useCase="build"` to get a briefing that includes what entities are loaded and how to query them. |
 | `dsds_list_entities` | List all entities with identifier, kind, status, and summary |
 | `dsds_search_entities` | Filter entities by kind, status, tags, or a text query |
-| `dsds_get_entity` | Full documentation for an entity by identifier or name |
+| `dsds_get_entity` | Full documentation for an entity by identifier or name. Returns all `documentBlocks` and `agentDocumentBlocks`. |
 | `dsds_get_document_block` | One specific block (e.g. `api`, `accessibility`) from an entity — faster than fetching the full entity |
-| `dsds_get_agent_context` | Machine-readable constraints, disambiguation, anti-patterns, and keywords for an entity. The most LLM-optimized content in a DSDS document. |
+| `dsds_get_agent_context` | Agent-optimized view of an entity. Renders content from both `agentDocumentBlocks` and `documentBlocks` (guidelines, use cases, props, sections — minus verbose accessibility and import blocks). The primary tool for understanding how to use a component. |
+| `dsds_get_blueprint` | Fetch a blueprint entity by identifier. Returns the full code block (ready to copy), guidelines, use cases, and related component links. Use this instead of `dsds_get_entity` for blueprint entities. |
 
 **Query workflow:**
 ```
 dsds_context_brief(useCase="build") → dsds_list_entities → dsds_search_entities → dsds_get_agent_context or dsds_get_entity
 ```
 
+For layouts and shells, check blueprints first:
+```
+dsds_search_entities(kind="blueprint") → dsds_get_blueprint(identifier)
+```
+
 ### Lint tools — require `LINT_PLUGINS`
 
 | Tool | Description |
 |------|-------------|
-| `dsds_lint_code` | Lint a code snippet using the configured ESLint plugins. Returns violations with rule ID, severity, line/column, and message. Accepts `code` (required) and `filename` (optional, defaults to `Component.tsx`). |
+| `dsds_lint_code` | Lint one or more code files using the configured ESLint plugins. Auto-applies all fixable violations and returns the corrected code. Pass all generated files in a single `files` array call. Remaining violations (no autofix available) are listed after the corrected code. |
+
+### Export check — requires `PACKAGE_EXPORT_PATHS`
+
+| Tool | Description |
+|------|-------------|
+| `dsds_check_exports` | Verify that specific components are actually exported from their packages. Returns a pass/fail for each name across all configured packages. Use before importing a component to catch `draft`-status components that are not yet shipped. |
+
+### Feedback
+
+| Tool | Description |
+|------|-------------|
+| `dsds_feedback` | Submit a session rating (1–5) and notes on what worked or was confusing. Call this at the end of any session where you used DSDS tools. Written to `DSDS_FEEDBACK_DIR`. |
 
 ---
 
@@ -230,15 +310,16 @@ DSDS files are JSON documents. Every file needs `dsdsVersion` and either an `ent
 **Single entity:**
 ```json
 {
-  "$schema": "https://designsystemdocspec.org/v0.7/dsds.bundled.schema.json",
-  "dsdsVersion": "0.7",
+  "$schema": "https://designsystemdocspec.org/v0.10.2/dsds.bundled.schema.json",
+  "dsdsVersion": "0.10.2",
   "entity": {
     "kind": "component",
     "identifier": "button",
     "name": "Button",
     "description": "Triggers an action or event when activated.",
     "metadata": { "status": "stable" },
-    "documentBlocks": []
+    "documentBlocks": [],
+    "agentDocumentBlocks": []
   }
 }
 ```
@@ -246,19 +327,23 @@ DSDS files are JSON documents. Every file needs `dsdsVersion` and either an `ent
 **Multi-entity:**
 ```json
 {
-  "$schema": "https://designsystemdocspec.org/v0.7/dsds.bundled.schema.json",
-  "dsdsVersion": "0.7",
+  "$schema": "https://designsystemdocspec.org/v0.10.2/dsds.bundled.schema.json",
+  "dsdsVersion": "0.10.2",
   "systemInfo": { "systemName": "My Design System" },
   "entityGroups": [
-    {
-      "name": "My Design System",
-      "entities": []
-    }
+    { "$ref": "./components/button.dsds.json#/entity" },
+    { "$ref": "./foundations/spacing.dsds.json#/entity" }
   ]
 }
 ```
 
 Use `dsds_spec_scaffold` to generate ready-to-fill templates, and `dsds_validate` to check them. Full spec: [designsystemdocspec.org](https://designsystemdocspec.org).
+
+### `agentDocumentBlocks`
+
+Every entity supports an optional `agentDocumentBlocks` array alongside `documentBlocks`. Both arrays accept the same block kinds. `agentDocumentBlocks` is never rendered for human readers — it exists solely for agent (LLM) consumption.
+
+Use it to add generation constraints, anti-patterns, and disambiguation notes without adding noise to human-facing docs. `dsds_get_agent_context` renders content from both arrays; `dsds_get_entity` returns both arrays in raw JSON.
 
 ---
 

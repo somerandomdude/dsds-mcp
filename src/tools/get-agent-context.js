@@ -46,17 +46,35 @@ function renderUseCases(block, lines) {
   lines.push('');
 }
 
-function renderSections(block, lines) {
-  for (const section of block.items ?? []) {
-    if (section.title) lines.push(`**${section.title}**`, '');
-    if (section.body) lines.push(asText(section.body), '');
-    for (const ex of section.examples ?? []) {
-      if (ex.description) lines.push(ex.description, '');
-      if (ex.presentation?.kind === 'code') {
-        lines.push('```' + (ex.presentation.language ?? ''), ex.presentation.code, '```', '');
-      }
+function renderSectionItem(section, lines) {
+  if (section.title) lines.push(`**${section.title}**`, '');
+  if (section.body) lines.push(asText(section.body), '');
+  for (const ex of section.examples ?? []) {
+    if (ex.description) lines.push(ex.description, '');
+    if (ex.presentation?.kind === 'code') {
+      lines.push('```' + (ex.presentation.language ?? ''), ex.presentation.code, '```', '');
     }
   }
+  for (const sub of section.sections ?? []) {
+    renderSectionItem(sub, lines);
+  }
+}
+
+function renderSections(block, lines) {
+  for (const section of block.items ?? []) {
+    renderSectionItem(section, lines);
+  }
+}
+
+function renderApi(block, lines) {
+  lines.push('| Prop | Type | Required | Description |');
+  lines.push('|------|------|----------|-------------|');
+  for (const prop of block.properties ?? []) {
+    const req = prop.required ? 'yes' : '—';
+    const type = prop.type ? `\`${prop.type}\`` : '—';
+    lines.push(`| \`${prop.identifier}\` | ${type} | ${req} | ${asText(prop.description ?? '')} |`);
+  }
+  lines.push('');
 }
 
 function renderBlock(block, lines) {
@@ -64,6 +82,9 @@ function renderBlock(block, lines) {
     case 'guidelines': lines.push('## Rules', ''); renderGuidelines(block, lines); break;
     case 'useCases': lines.push('## When to use', ''); renderUseCases(block, lines); break;
     case 'sections': renderSections(block, lines); break;
+    case 'api': lines.push('## Props', ''); renderApi(block, lines); break;
+    case 'imports': break; // skip — trivial (just the import statement)
+    case 'accessibility': break; // skip — verbose keyboard/criteria detail not needed for code generation
     default:
       lines.push(`## ${block.kind}`, '', '```json', JSON.stringify(block, null, 2), '```', '');
   }
@@ -96,22 +117,16 @@ export async function getAgentContextHandler({ identifier }, getSystems) {
   }
 
   const agentBlocks = found.agentDocumentBlocks ?? [];
+  const docBlocks = found.documentBlocks ?? [];
 
-  // Hard constraints from the human-facing guidelines — agents must obey
-  // these too; they are already machine-readable (RFC 2119 levels).
-  const hardRules = (found.documentBlocks ?? [])
-    .filter(b => b.kind === 'guidelines')
-    .flatMap(b => b.items ?? [])
-    .filter(item => item.level === 'MUST' || item.level === 'MUST_NOT');
-
-  if (agentBlocks.length === 0 && hardRules.length === 0) {
+  if (agentBlocks.length === 0 && docBlocks.length === 0) {
     const lines = [
       `# ${found.name ?? found.identifier} — no agent context defined`,
       '',
-      'This entity has no `agentDocumentBlocks` and no MUST/MUST_NOT guidelines.',
+      'This entity has no `agentDocumentBlocks` and no `documentBlocks`.',
       '',
       'Add an `agentDocumentBlocks` array — it accepts the same document block kinds as `documentBlocks` but is intended for agent (AI/LLM) consumption only and is never rendered for humans. Typical content:',
-      '- A `guidelines` block with generation constraints (`level`: MUST/MUST_NOT, optional `evidence`)',
+      '- A `guidelines` block with generation constraints (`level`: must/must-not, optional `rationale`)',
       '- A `useCases` block disambiguating this entity from confusable ones (discouraged items with `alternative`)',
       '- A `sections` block with ready-to-use code examples',
     ];
@@ -128,13 +143,15 @@ export async function getAgentContextHandler({ identifier }, getSystems) {
   }
 
   if (agentBlocks.length > 0) {
-    lines.push('# Agent-only documentation', '');
+    lines.push('## Agent-optimized context', '');
     for (const block of agentBlocks) renderBlock(block, lines);
   }
 
-  if (hardRules.length > 0) {
-    lines.push('# Hard constraints from the human-facing guidelines', '');
-    renderGuidelines({ items: hardRules }, lines);
+  // Render all documentBlocks (minus imports and accessibility which are not relevant for code generation).
+  const docBlocksToRender = docBlocks.filter(b => b.kind !== 'imports' && b.kind !== 'accessibility');
+  if (docBlocksToRender.length > 0) {
+    lines.push('## Full component documentation', '');
+    for (const block of docBlocksToRender) renderBlock(block, lines);
   }
 
   const notice = getUpdateNotice();

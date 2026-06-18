@@ -48,8 +48,11 @@ export async function feedbackHandler(args, feedbackDir) {
     comment,
   };
 
+  const date = entry.timestamp.slice(0, 10);
+  const dayDir = join(feedbackDir, date);
+  await mkdir(dayDir, { recursive: true });
   const filename = `${entry.timestamp.replace(/[:.]/g, '-')}.json`;
-  await writeFile(join(feedbackDir, filename), JSON.stringify(entry, null, 2) + '\n', 'utf-8');
+  await writeFile(join(dayDir, filename), JSON.stringify(entry, null, 2) + '\n', 'utf-8');
 
   return {
     content: [{ type: 'text', text: `Feedback recorded (rating: ${rating}/5). Thank you.` }],

@@ -54,15 +54,27 @@ export async function specEntitySchemaHandler({ kind }) {
     'Set via the `metadata` object on the entity:',
     '',
     ...Object.entries(METADATA_FIELDS).map(([k, v]) => `- **\`${k}\`** — ${v}`),
-    '',
-    '## Valid Document Block Types',
-    '',
-    validBlocks.length
-      ? `For \`${kind}\`, these block types are allowed in \`documentBlocks\`:\n\n${validBlocks.map(b => `- \`${b}\``).join('\n')}`
-      : 'No document blocks defined for this kind.',
-    '',
-    'Use `dsds_spec_document_blocks` to get descriptions of each block type.',
   );
+
+  if (kind === 'chunk') {
+    lines.push(
+      '',
+      '## Structure Note',
+      '',
+      'Chunks do **not** use `documentBlocks`. Instead, `guidelines` and `useCases` are top-level arrays directly on the entity. Use `dsds_get_chunk` to retrieve a chunk with its code and rules rendered for agent use.',
+    );
+  } else {
+    lines.push(
+      '',
+      '## Valid Document Block Types',
+      '',
+      validBlocks.length
+        ? `For \`${kind}\`, these block types are allowed in \`documentBlocks\`:\n\n${validBlocks.map(b => `- \`${b}\``).join('\n')}`
+        : 'No document blocks defined for this kind.',
+      '',
+      'Use `dsds_spec_document_blocks` to get descriptions of each block type.',
+    );
+  }
 
   const notice = getUpdateNotice();
   if (notice) lines.push(notice);
@@ -92,12 +104,21 @@ function buildFieldTable(kind, def) {
     rows.push(['`overrides`', 'No', 'Array of token override objects']);
   }
 
-  rows.push(
-    ['`metadata`', 'No', 'Object containing description, status, tags, summary, links, etc.'],
-    ['`documentBlocks`', 'No', 'Array of typed documentation blocks'],
-    ['`agents`', 'No', 'AI-optimized context: constraints, disambiguation, anti-patterns, keywords'],
-    ['`$extensions`', 'No', 'Vendor extensions (use reverse-domain namespace keys)'],
-  );
+  if (kind === 'chunk') {
+    rows.push(['`code`', 'Yes', 'Two forms: inline (`code` + `language`) or referenced (`src` + `language`, where `src` is a relative path to a code file)']);
+    rows.push(['`description`', 'No', 'What this chunk captures and which components it composes (CommonMark)']);
+    rows.push(['`guidelines`', 'No', 'Top-level array of guidelineEntry objects (must/should/should-not/must-not + rationale)']);
+    rows.push(['`useCases`', 'No', 'Top-level array of useCase objects (recommended/discouraged + optional alternative)']);
+    rows.push(['`metadata`', 'No', 'status, tags, since, links (use links to reference composed components), etc.']);
+    rows.push(['`$extensions`', 'No', 'Vendor extensions (use reverse-domain namespace keys)']);
+  } else {
+    rows.push(
+      ['`metadata`', 'No', 'Object containing description, status, tags, summary, links, etc.'],
+      ['`documentBlocks`', 'No', 'Array of typed documentation blocks'],
+      ['`agents`', 'No', 'AI-optimized context: constraints, disambiguation, anti-patterns, keywords'],
+      ['`$extensions`', 'No', 'Vendor extensions (use reverse-domain namespace keys)'],
+    );
+  }
 
   return rows.map(([field, req, desc]) => `| ${field} | ${req} | ${desc} |`);
 }

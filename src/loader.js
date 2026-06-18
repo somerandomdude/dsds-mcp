@@ -57,16 +57,35 @@ async function resolveRef(ref, baseDir, visited) {
   }
 
   const doc = JSON.parse(raw);
+  const fileDir = dirname(absPath);
   const newVisited = new Set([...visited, absPath]);
 
   if (fragment) {
     const value = resolvePointer(doc, fragment);
     if (!value) return [];
-    if (value.kind) return [value];
-    return extractEntities(value, dirname(absPath), newVisited);
+    if (value.kind) {
+      await resolveChunkCodeSrc(value, fileDir);
+      return [value];
+    }
+    return extractEntities(value, fileDir, newVisited);
   }
 
-  return extractEntities(doc, dirname(absPath), newVisited);
+  return extractEntities(doc, fileDir, newVisited);
+}
+
+/**
+ * If a chunk entity uses code.src (referenced form), reads the file and
+ * inlines its content as code.code so downstream tools see a plain string.
+ */
+async function resolveChunkCodeSrc(entity, dir) {
+  if ((entity.kind === 'chunk' || entity.kind === 'blueprint') && entity.code?.src && !entity.code.code) {
+    const codePath = resolve(dir, entity.code.src);
+    try {
+      entity.code.code = await readFile(codePath, 'utf-8');
+    } catch {
+      // leave code.code undefined — get-chunk will render an empty block
+    }
+  }
 }
 
 /** Resolves a JSON Pointer fragment (e.g. "/entity") against a document. */
@@ -74,6 +93,16 @@ function resolvePointer(doc, fragment) {
   const pointer = fragment.startsWith('/') ? fragment.slice(1) : fragment;
   if (!pointer) return doc;
   return pointer.split('/').reduce((obj, key) => obj?.[key], doc);
+}
+
+/**
+ * Loads multiple intro entities from an array of file paths.
+ * Returns only the successfully loaded entities (silently skips failures).
+ */
+export async function loadIntroEntities(paths) {
+  if (!paths || paths.length === 0) return [];
+  const results = await Promise.all(paths.map(loadIntroEntity));
+  return results.filter(Boolean);
 }
 
 /**

@@ -29,22 +29,29 @@ export async function specScaffoldHandler({ kind }) {
     };
   }
 
+  const isChunk = kind === 'chunk';
   const lines = [
     `# DSDS Scaffold: \`${kind}\``,
     '',
-    'Replace the placeholder values with your actual content. Add `documentBlocks` to document guidelines, anatomy, API, etc.',
+    isChunk
+      ? 'Replace the placeholder values with your actual content. Add `guidelines` and `useCases` directly on the entity — chunks do not use `documentBlocks`.'
+      : 'Replace the placeholder values with your actual content. Add `documentBlocks` to document guidelines, anatomy, API, etc.',
     '',
     '```json',
     JSON.stringify(scaffold, null, 2),
     '```',
     '',
     'Next steps:',
-    '- Use `dsds_spec_document_blocks` to see which block types are available for this kind',
     '- Use `dsds_validate` to validate the document as you fill it in',
+    '- Use `dsds_spec_entity_schema` to see all available fields for this entity',
   ];
 
-  if (kind !== 'system') {
-    lines.push('- Use `dsds_spec_entity_schema` to see all available fields for this entity');
+  if (!isChunk && kind !== 'system') {
+    lines.push('- Use `dsds_spec_document_blocks` to see which block types are available for this kind');
+  }
+
+  if (isChunk) {
+    lines.push('- Use `dsds_get_chunk` to retrieve a chunk and preview how it renders for agents');
   }
 
   const notice = getUpdateNotice();
