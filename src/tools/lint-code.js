@@ -1,8 +1,9 @@
 import { createRequire } from 'node:module';
-import { resolve, join } from 'node:path';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { mkdir, appendFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { writeLog } from '../logger.js';
 
 // Session-level lint result cache. An agent can pass { cacheKey, filename } instead of
 // { code, filename } on subsequent calls to avoid re-sending unchanged file content.
@@ -95,6 +96,14 @@ export const lintCodeDef = {
     'Auto-applies all fixable violations and returns the corrected code — copy the corrected code directly into your files. ' +
     'Returns remaining violations that require manual edits alongside the corrected code. ' +
     'Use the `files` array to lint ALL generated files in one call — this is the preferred usage. ' +
+    'TOKEN-SAVING — read carefully: ' +
+    '(1) ONE PASS. A clean or auto-fixed result is FINAL — after applying the corrected code, do NOT call this tool ' +
+    'again just to confirm. Re-linting unchanged code only re-sends tokens you already have. ' +
+    '(2) CHANGED FILES ONLY. On any later call, send only the files you actually changed since the last call; for ' +
+    'files that have not changed, pass `cacheKey` (from a previous result) or `path` instead of re-sending `code`. ' +
+    '(3) LINT BY PATH. If a file is already written to disk, pass `path` (relative to the lint project root) instead ' +
+    'of `code` so you do not have to re-emit its contents at all. ' +
+    'Code produced by dsds_build_component is already design-system-valid — do not lint it. ' +
     'IMPORTANT: Only lint complete implementations. Design-system rules fire on JSX elements — ' +
     'stub files that return null or contain no JSX will produce no design-system violations, ' +
     'giving a false all-clear. Always call this tool after writing your final component code.',
@@ -110,9 +119,10 @@ export const lintCodeDef = {
         items: {
           type: 'object',
           properties: {
-            code:     { type: 'string', description: 'Source code to lint. Required unless `cacheKey` is provided.' },
+            code:     { type: 'string', description: 'Source code to lint. Required unless `cacheKey` or `path` is provided.' },
             filename: { type: 'string', description: "Filename for parser inference (e.g. 'App.tsx')." },
             cacheKey: { type: 'string', description: 'Cache key from a previous dsds_lint_code call. Pass this instead of `code` to skip re-sending unchanged file content.' },
+            path:     { type: 'string', description: 'Path to a file already written to disk, relative to the lint project root. Pass this instead of `code` to lint without re-sending the file contents.' },
           },
         },
       },
@@ -128,6 +138,10 @@ export const lintCodeDef = {
         type: 'string',
         description: 'Single-file mode: cache key from a previous call. Pass this instead of `code` to skip re-sending unchanged file content.',
       },
+      path: {
+        type: 'string',
+        description: 'Single-file mode: path to a file already on disk (relative to the lint project root). Pass this instead of `code` to avoid re-sending its contents.',
+      },
     },
   },
 };
@@ -136,49 +150,44 @@ async function writeLintLog(logsDir, fileResults) {
   const relevant = fileResults.filter(f => f.messages?.length > 0 || f.fixed);
   if (relevant.length === 0) return;
 
-  try {
-    await mkdir(logsDir, { recursive: true });
-    const date = new Date().toISOString().slice(0, 10);
-    const logPath = join(logsDir, `${date}.jsonl`);
-    const entry = {
-      timestamp: new Date().toISOString(),
-      filesLinted: fileResults.length,
-      filesFixed: fileResults.filter(f => f.fixed).length,
-      totalRemainingViolations: fileResults.reduce((n, f) => n + (f.messages?.length ?? 0), 0),
-      files: relevant.map(f => ({
-        filename: f.filename,
-        fixed: f.fixed ?? false,
-        violations: (f.messages ?? []).map(m => ({
-          ruleId: m.ruleId ?? null,
-          severity: m.severity,
-          line: m.line,
-          col: m.column,
-          fixable: m.fix,
-        })),
+  await writeLog(logsDir, {
+    type: 'lint',
+    filesLinted: fileResults.length,
+    filesFixed: fileResults.filter(f => f.fixed).length,
+    totalRemainingViolations: fileResults.reduce((n, f) => n + (f.messages?.length ?? 0), 0),
+    files: relevant.map(f => ({
+      filename: f.filename,
+      fixed: f.fixed ?? false,
+      violations: (f.messages ?? []).map(m => ({
+        ruleId: m.ruleId ?? null,
+        severity: m.severity,
+        line: m.line,
+        col: m.column,
+        fixable: m.fix,
       })),
-    };
-    await appendFile(logPath, JSON.stringify(entry) + '\n', 'utf-8');
-  } catch {
-    // Logging is best-effort — never fail the lint call over a write error
-  }
+    })),
+  });
 }
 
 export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
   // Normalise input: batch `files` array takes priority over single code/cacheKey.
   const filesToLint = args.files?.length
     ? args.files
-    : args.code != null || args.cacheKey != null
-      ? [{ code: args.code, filename: args.filename, cacheKey: args.cacheKey }]
+    : args.code != null || args.cacheKey != null || args.path != null
+      ? [{ code: args.code, filename: args.filename, cacheKey: args.cacheKey, path: args.path }]
       : null;
 
   if (!filesToLint) {
     return {
       isError: true,
-      content: [{ type: 'text', text: 'Provide either `files` (array), `code` (string), or `cacheKey` (from a previous call).' }],
+      content: [{ type: 'text', text: 'Provide either `files` (array), `code` (string), `path` (file on disk), or `cacheKey` (from a previous call).' }],
     };
   }
 
-  const { plugins: pluginNames, resolveDir } = getLintConfig();
+  const { plugins: pluginNames, resolveDir, sourceDir } = getLintConfig();
+  // Files (and ESLint's cwd) live in the project being linted, when configured;
+  // plugins are still resolved from resolveDir (where they're installed).
+  const lintDir = sourceDir || resolveDir;
 
   if (pluginNames.length === 0) {
     return {
@@ -260,7 +269,7 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
   const eslint = new ESLint({
     overrideConfigFile: true,
     overrideConfig,
-    cwd: resolveDir,
+    cwd: lintDir,
     fix: true,
   });
 
@@ -270,6 +279,21 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
   // Lint all files
   const fileResults = [];
   for (const file of filesToLint) {
+    // Lint-by-path: the file is already on disk, so read it here instead of
+    // making the agent re-emit its full contents as a tool argument.
+    if (file.path && file.code == null && file.cacheKey == null) {
+      try {
+        file.code = await readFile(resolve(lintDir, file.path), 'utf-8');
+        file.filename = file.filename ?? file.path;
+      } catch (err) {
+        fileResults.push({
+          filename: file.filename ?? file.path, messages: [], fixedCode: null, fixed: false, cacheKey: null,
+          error: `Could not read "${file.path}" (relative to ${lintDir}): ${err.message}`,
+        });
+        continue;
+      }
+    }
+
     const filename = file.filename ?? 'Component.tsx';
 
     // Cache hit: agent passed a key from a previous call — return stored result.
@@ -294,7 +318,7 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
       continue;
     }
 
-    const filePath = resolve(resolveDir, filename);
+    const filePath = resolve(lintDir, filename);
     try {
       const results = await eslint.lintText(file.code, { filePath });
       const r = results[0];
@@ -442,6 +466,16 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
 
   if (loadErrors.length > 0) {
     lines.push('---', '', `> ${loadErrors.length} plugin(s) failed to load: ${loadErrors.join(', ')}`);
+  }
+
+  // One-pass directive: when nothing is left to fix, tell the agent to stop here
+  // rather than re-linting to "confirm" (which just re-sends the same code).
+  if (totalRemaining === 0 && filesWithErrors === 0) {
+    lines.push(
+      '',
+      '> ✓ One pass complete — apply the corrected code above and move on. Do NOT call dsds_lint_code again to confirm. ' +
+      'Lint again only if you change a file, and then send only that file (or its `path`/`cacheKey`).',
+    );
   }
 
   // Cache key hints — only for entries that were freshly linted (have a cacheKey)

@@ -28,6 +28,14 @@ export function loadConfig() {
   const rawLintResolveDir = process.env['LINT_RESOLVE_DIR'];
   const lintResolveDir = rawLintResolveDir ? expandHome(rawLintResolveDir.trim()) : process.cwd();
 
+  // LINT_SOURCE_DIR is the root of the project being linted (where the agent's
+  // files live). When set, `dsds_lint_code({ path })` resolves paths against it
+  // and ESLint runs with it as cwd, so files written there are "inside base
+  // path". Plugins are still resolved from LINT_RESOLVE_DIR. Defaults to the
+  // resolve dir (current behavior) when unset.
+  const rawLintSourceDir = process.env['LINT_SOURCE_DIR'];
+  const lintSourceDir = rawLintSourceDir ? expandHome(rawLintSourceDir.trim()) : null;
+
   // DSDS_INTRO_PATHS accepts comma-separated paths; DSDS_INTRO_PATH is the legacy single-path alias.
   const rawIntros = process.env['DSDS_INTRO_PATHS'] ?? process.env['DSDS_INTRO_PATH'];
   const introPaths = rawIntros
@@ -35,6 +43,13 @@ export function loadConfig() {
     : [];
   const rawFeedbackDir = process.env['DSDS_FEEDBACK_DIR'];
   const rawLogsDir = process.env['DSDS_LOGS_DIR'];
+
+  // Feedback is on by default; set DSDS_ENABLE_FEEDBACK to a falsy string
+  // (false/0/no/off) to remove the dsds_feedback tool and its instruction entirely.
+  const rawEnableFeedback = process.env['DSDS_ENABLE_FEEDBACK'];
+  const enableFeedback = rawEnableFeedback == null
+    ? true
+    : !/^(false|0|no|off)$/i.test(rawEnableFeedback.trim());
 
   // PACKAGE_EXPORT_PATHS: comma-separated "packageName=packagePath" pairs.
   // Example: @sanity-labs/ui-poc=/path/to/ui-poc/packages/ui,@sanity/ui=/path/to/sanity-ui/packages/ui
@@ -56,8 +71,10 @@ export function loadConfig() {
     lintPaths,
     lintPlugins,
     lintResolveDir,
+    lintSourceDir,
     introPaths,
     packageExportPaths,
+    enableFeedback,
     feedbackDir: rawFeedbackDir ? expandHome(rawFeedbackDir.trim()) : resolve(__dirname, '../feedback'),
     logsDir: rawLogsDir ? expandHome(rawLogsDir.trim()) : resolve(__dirname, '../logs'),
     schemaVersion: process.env['DSDS_SCHEMA_VERSION'] ?? '0.10.0',

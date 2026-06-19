@@ -66,7 +66,10 @@ Use the following lookup order — stop as soon as you have what you need:
    details, \`variants\` for the full option matrix, \`states\` for interaction behaviour).
    Faster and cheaper than fetching the whole entity.
 
-3. **\`dsds_get_entity(identifier)\`** — use only when you need the raw, complete entity
+3. **\`dsds_build_component(step:"start", identifier)\`** — ALWAYS USE when you're ready to
+add a component to code. This is the required way of adding components.
+
+4. **\`dsds_get_entity(identifier)\`** — use only when you need the raw, complete entity
    including all blocks in their original JSON structure. Prefer the two calls above.
 
 ---
@@ -89,7 +92,7 @@ If a chunk matches, call \`dsds_get_chunk(identifier)\` to retrieve the full cod
 
 ---
 
-Only after completing all six steps should you write code.
+Only after completing these steps should you write code.
 `.trim();
 
 

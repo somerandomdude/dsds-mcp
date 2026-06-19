@@ -355,6 +355,26 @@ npm test             # run tests once
 npm run test:watch   # watch mode
 npm run dev          # run the server directly (reads env vars from shell)
 npm run update-schema  # fetch the latest published DSDS schema from designsystemdocspec.org
+npm run logs         # view usage logs (lint + chunk activity) in a readable format
 ```
+
+The server records usage to `logs/YYYY-MM-DD.jsonl`:
+
+- **Every tool call** — `{ type: "tool", tool, ok, durationMs }`
+- **Chunk access** — `dsds_get_chunk` writes a detailed `{ type: "chunk", identifier, name }` entry
+- **Lint runs** — `dsds_lint_code` writes a detailed `{ type: "lint", … }` entry with per-file violations
+
+Read them back with `npm run logs`. Pass options after `--`:
+
+```bash
+npm run logs                      # last 7 days: lint + chunk detail, plus a tool-usage summary
+npm run logs -- --summary         # totals only, no per-entry detail
+npm run logs -- --type tool       # per-call tool log + tool-usage breakdown
+npm run logs -- --type lint       # only lint entries (or --type chunk)
+npm run logs -- --days 30         # last 30 days
+npm run logs -- --date 2026-06-18 # a single day
+```
+
+Tool calls always feed the **Tool usage** summary (counts and error totals per tool). They're omitted from the per-entry view in the combined `--type all` mode — where they'd duplicate the chunk/lint detail — but shown per call under `--type tool`.
 
 The spec schema is bundled at `src/spec/dsds.bundled.schema.json`. Run `npm run update-schema` to pull the latest published version automatically. It fetches the schema from `https://designsystemdocspec.org/v{version}/dsds.bundled.schema.json` and updates `BUNDLED_VERSION` in `src/spec/version.js`. The MCP server loads the schema once at startup via `require()`, so restart the server after updating.

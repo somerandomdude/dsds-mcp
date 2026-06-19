@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { validateDocument, validateJsonString } from '../src/validator.js';
+import { BUNDLED_VERSION } from '../src/spec/version.js';
 
+// Use the bundled version so these fixtures don't drift on every schema bump —
+// the schema pins `dsdsVersion` to a const equal to BUNDLED_VERSION.
 const validButton = {
-  dsdsVersion: '0.10.0',
+  dsdsVersion: BUNDLED_VERSION,
   entity: {
     kind: 'component',
     identifier: 'button',
@@ -24,7 +27,7 @@ describe('validateDocument', () => {
 
   it('returns errors when required entity field is missing', () => {
     const result = validateDocument({
-      dsdsVersion: '0.10.0',
+      dsdsVersion: BUNDLED_VERSION,
       entity: { kind: 'component', identifier: 'x' }, // missing name
     });
     expect(result.valid).toBe(false);
@@ -32,7 +35,7 @@ describe('validateDocument', () => {
 
   it('returns errors for unknown entity kind', () => {
     const result = validateDocument({
-      dsdsVersion: '0.10.0',
+      dsdsVersion: BUNDLED_VERSION,
       entity: { kind: 'widget', identifier: 'x', name: 'X' },
     });
     expect(result.valid).toBe(false);
@@ -40,7 +43,7 @@ describe('validateDocument', () => {
 
   it('validates a multi-entity document', () => {
     const result = validateDocument({
-      dsdsVersion: '0.10.0',
+      dsdsVersion: BUNDLED_VERSION,
       entityGroups: [
         {
           name: 'Components',

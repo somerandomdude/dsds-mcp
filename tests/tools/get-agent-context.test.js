@@ -13,7 +13,7 @@ describe('getAgentContextHandler', () => {
     const result = await getAgentContextHandler({ identifier: 'button' }, () => systems);
     const text = result.content[0].text;
     expect(text).toContain('Agent Context');
-    expect(text).toContain('Agent-only documentation');
+    expect(text).toContain('Agent-optimized context');
     expect(text).toContain('Rules');
     expect(result.isError).toBeFalsy();
   });

@@ -1,16 +1,4 @@
-import { appendFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
-
-async function writeChunkLog(logsDir, identifier, name) {
-  if (!logsDir) return;
-  try {
-    await mkdir(logsDir, { recursive: true });
-    const date = new Date().toISOString().slice(0, 10);
-    const logPath = join(logsDir, `${date}.jsonl`);
-    const entry = { timestamp: new Date().toISOString(), tool: 'dsds_get_chunk', identifier, name };
-    await appendFile(logPath, JSON.stringify(entry) + '\n', 'utf-8');
-  } catch { /* best-effort */ }
-}
+import { writeLog } from '../logger.js';
 
 export const getChunkDef = {
   name: 'dsds_get_chunk',
@@ -143,7 +131,7 @@ export async function getChunkHandler({ identifier }, getSystems, logsDir = null
     lines.push('');
   }
 
-  await writeChunkLog(logsDir, chunk.identifier, chunk.name);
+  await writeLog(logsDir, { type: 'chunk', tool: 'dsds_get_chunk', identifier: chunk.identifier, name: chunk.name });
   return { content: [{ type: 'text', text: lines.join('\n') }] };
 }
 

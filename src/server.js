@@ -11,6 +11,7 @@ import {
 import { BUNDLED_VERSION } from './spec/version.js';
 import { BUILD_BRIEF, AUTHOR_BRIEF, PROMPT_META } from './briefs.js';
 import { listResources, readResource } from './resources.js';
+import { writeLog } from './logger.js';
 
 import { specOverviewDef, specOverviewHandler } from './tools/spec-overview.js';
 import { specEntitySchemaDef, specEntitySchemaHandler } from './tools/spec-entity-schema.js';
@@ -28,21 +29,26 @@ import { getChunkDef, getChunkHandler } from './tools/get-chunk.js';
 import { feedbackDef, feedbackHandler } from './tools/feedback.js';
 import { checkExportsDef, checkExportsHandler } from './tools/check-exports.js';
 import { toMarkdownDef, toMarkdownHandler } from './tools/to-markdown.js';
+import { buildComponentDef, buildComponentHandler } from './tools/build-component.js';
+import { authorComponentDocDef, authorComponentDocHandler } from './tools/author-component-doc.js';
 
 const BASE_INSTRUCTIONS = `
 DSDS MCP — Design System Documentation Spec v${BUNDLED_VERSION}
 
 START HERE: Call dsds_context_brief first to get a full briefing before any work begins.
-- dsds_context_brief(useCase="build") — before implementing UI with the design system
+- dsds_context_brief(useCase="build") — before implementing UI with the design system. To implement an existing component interactively, use dsds_build_component (a prop-by-prop wizard, listed under DESIGN SYSTEM TOOLS); for one-shot context use dsds_get_chunk / dsds_get_entity / dsds_get_agent_context.
 - dsds_context_brief(useCase="author") — before documenting a design system in DSDS format
 
 SPEC TOOLS — for authoring DSDS-compliant documentation (always available, no configuration needed):
 - dsds_spec_overview → dsds_spec_entity_schema → dsds_spec_scaffold → dsds_spec_document_blocks → dsds_validate
+- AUTHORING (writing new DSDS docs) is distinct from IMPLEMENTING (building UI from a component that already exists). These spec tools produce DSDS documentation JSON, never UI/React code. To implement an existing component, use dsds_build_component (DESIGN SYSTEM TOOLS below) instead.
+- Authoring a COMPONENT document? Two paths: dsds_author_component_doc is a guided, step-by-step wizard (start with step:"start", no data) that produces a DSDS component-documentation *document* (a JSON entity) from scratch — it supplies valid field values at each step and needs no schema knowledge. dsds_spec_scaffold(kind:"component") gives a blank template to fill in yourself when you already know the schema. For any other entity kind (token, theme, foundation, pattern, guide, chunk) or a multi-entity system, use dsds_spec_scaffold.
 
 DESIGN SYSTEM TOOLS — for querying an existing DSDS document (requires DSDS_PATHS to be configured):
 - dsds_list_entities → dsds_search_entities → dsds_get_entity or dsds_get_document_block
 - dsds_get_agent_context(identifier) — get LLM-optimized rules and constraints for a specific entity
 - dsds_get_chunk(identifier) — get a pre-assembled code chunk for a common use case, along with its guidelines and use cases rendered for agent use
+- dsds_build_component(step:"start", identifier:"button") — interactive wizard that walks an existing component's props one at a time, offering only each prop's valid options as Q&A, then returns the composed JSX in result.code
 
 RESOURCES: Each design system entity is also available as a resource at dsds://entity/{identifier}.
 
@@ -55,9 +61,13 @@ LINT TOOLS — for linting code against configured ESLint plugins (requires LINT
 
 EXPORT CHECK — before importing a component, confirm it exists in the package (requires PACKAGE_EXPORT_PATHS):
 - dsds_check_exports(components=["Box", "TextInput"]) — verify each name is actually exported
-
-FEEDBACK: Before you finish your session, call dsds_feedback to rate the experience (1–5) and note what was helpful or confusing. Call it as your last tool call — before emitting any final output or files. This is required at the end of every session.
 `.trim();
+
+// Appended to the instructions only when the feedback tool is enabled.
+const FEEDBACK_INSTRUCTION =
+  'FEEDBACK: Before you finish your session, call dsds_feedback to rate the experience (1–5) and note ' +
+  'what was helpful or confusing. Call it as your last tool call — before emitting any final output or ' +
+  'files. This is required at the end of every session.';
 
 /**
  * Renders a DSDS entity to a markdown string suitable for agent instructions.
@@ -201,11 +211,14 @@ function promptMessage(text) {
   return { role: 'user', content: { type: 'text', text } };
 }
 
-export function createServer(getSystems, getSummaries, introEntities = [], getLintConfig = null, getExportPaths = null, feedbackDir = null, logsDir = null) {
+export function createServer(getSystems, getSummaries, introEntities = [], getLintConfig = null, getExportPaths = null, feedbackDir = null, logsDir = null, enableFeedback = true) {
   const introTexts = introEntities.map(renderIntroEntity).filter(Boolean);
-  const INSTRUCTIONS = introTexts.length > 0
-    ? `${BASE_INSTRUCTIONS}\n\n${introTexts.join('\n\n')}`
+  const baseWithFeedback = enableFeedback
+    ? `${BASE_INSTRUCTIONS}\n\n${FEEDBACK_INSTRUCTION}`
     : BASE_INSTRUCTIONS;
+  const INSTRUCTIONS = introTexts.length > 0
+    ? `${baseWithFeedback}\n\n${introTexts.join('\n\n')}`
+    : baseWithFeedback;
 
   const server = new Server(
     { name: 'dsds-mcp', version: '0.1.0' },
@@ -220,6 +233,8 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
     specEntitySchemaDef,
     specDocumentBlocksDef,
     specScaffoldDef,
+    authorComponentDocDef,
+    buildComponentDef,
     validateDef,
     listEntitiesDef,
     getEntityDef,
@@ -230,16 +245,15 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
     lintCodeDef,
     checkExportsDef,
     toMarkdownDef,
-    feedbackDef,
+    ...(enableFeedback ? [feedbackDef] : []),
   ];
 
   const toolMap = new Map(toolDefs.map(t => [t.name, t]));
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: toolDefs }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args = {} } = request.params;
-
+  // Resolve and run a tool call, returning its result (never throws).
+  async function dispatch(name, args) {
     const toolDef = toolMap.get(name);
     if (!toolDef) return errorResponse(`Unknown tool: "${name}"`);
 
@@ -253,6 +267,8 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
         case 'dsds_spec_entity_schema':   return specEntitySchemaHandler(args);
         case 'dsds_spec_document_blocks': return specDocumentBlocksHandler(args);
         case 'dsds_spec_scaffold':        return specScaffoldHandler(args);
+        case 'dsds_build_component':      return buildComponentHandler(args, getSystems, getSummaries);
+        case 'dsds_author_component_doc': return authorComponentDocHandler(args);
         case 'dsds_validate':             return validateHandler(args);
         case 'dsds_list_entities':        return listEntitiesHandler(args, getSystems, getSummaries);
         case 'dsds_get_entity':           return getEntityHandler(args, getSystems, getSummaries);
@@ -269,6 +285,25 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
     } catch (err) {
       return errorResponse(`Tool error: ${err.message}`);
     }
+  }
+
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args = {} } = request.params;
+    const startedAt = Date.now();
+
+    const result = await dispatch(name, args);
+
+    // Record every tool call (best-effort, fire-and-forget). Detailed entries
+    // (chunk/lint) are still written separately by those handlers. On failure,
+    // capture the error message so "why did X error?" is answerable from the log.
+    const entry = { type: 'tool', tool: name, ok: !result.isError, durationMs: Date.now() - startedAt };
+    if (result.isError) {
+      const msg = result.content?.[0]?.text;
+      if (msg) entry.error = msg.length > 300 ? msg.slice(0, 300) + '…' : msg;
+    }
+    writeLog(logsDir, entry);
+
+    return result;
   });
 
   // ── Prompts ────────────────────────────────────────────────────────────────
