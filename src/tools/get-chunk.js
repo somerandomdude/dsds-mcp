@@ -4,7 +4,7 @@ export const getChunkDef = {
   name: 'dsds_get_chunk',
   description:
     'Get a chunk by identifier, rendered for agent use. Returns the code block (ready to copy), ' +
-    'guidelines, use cases, and composed-component links. ' +
+    'guidelines, use cases, and its relationships (composes / depends-on / alternative-to edges). ' +
     'Use this instead of dsds_get_entity when working with chunk entities.',
   inputSchema: {
     type: 'object',
@@ -87,13 +87,13 @@ export async function getChunkHandler({ identifier }, getSystems, logsDir = null
     '',
   );
 
-  const componentLinks = resolveComponentLinks(meta);
-  if (componentLinks.length > 0) {
-    lines.push('## Composed Components', '');
-    for (const link of componentLinks) {
-      const req = link.required ? ' *(required)*' : '';
-      const role = link.role ? ` — ${link.role}` : '';
-      lines.push(`- \`${link.identifier}\`${role}${req}`);
+  const relationships = resolveRelationships(chunk);
+  if (relationships.length > 0) {
+    lines.push('## Relationships', '');
+    for (const r of relationships) {
+      const req = r.required ? ' *(required)*' : '';
+      const role = r.role ? ` — ${r.role}` : '';
+      lines.push(`- **${r.relation}** \`${r.target}\`${role}${req}`);
     }
     lines.push('');
   }
@@ -145,12 +145,24 @@ function resolveStatus(metadata) {
   return typeof s === 'string' ? s : s.overall ?? s.value;
 }
 
-function resolveComponentLinks(metadata) {
-  if (!metadata) return [];
-  const links = Array.isArray(metadata) ? [] : (metadata.links ?? []);
-  return links.filter(l =>
-    l.identifier && ['component', 'pattern', 'foundation', 'token', 'token-group'].includes(l.kind)
-  );
+// DSDS 0.12.0: relationships are typed edges on entity.relationships.
+// Falls back to the deprecated metadata.links (internal-artifact kinds) so
+// un-migrated documents still render a Relationships section.
+function resolveRelationships(entity) {
+  if (Array.isArray(entity.relationships) && entity.relationships.length > 0) {
+    return entity.relationships;
+  }
+  const meta = entity.metadata;
+  const links = (meta && !Array.isArray(meta) ? meta.links : null) ?? [];
+  const ARTIFACT_KINDS = ['component', 'pattern', 'foundation', 'token', 'token-group', 'chunk', 'required'];
+  return links
+    .filter(l => l.identifier && ARTIFACT_KINDS.includes(l.kind))
+    .map(l => ({
+      relation: l.kind === 'chunk' ? 'alternative-to' : 'composes',
+      target: l.identifier,
+      role: l.role,
+      required: l.kind === 'required',
+    }));
 }
 
 function formatLevel(level) {

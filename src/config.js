@@ -51,6 +51,15 @@ export function loadConfig() {
     ? true
     : !/^(false|0|no|off)$/i.test(rawEnableFeedback.trim());
 
+  // Intro entities are injected into every system prompt. Inline (default) renders
+  // them in full (~thousands of tokens). Set DSDS_INTRO_INLINE to a falsy string to
+  // inject only a compact index (title + one-line each) instead — much smaller per
+  // prompt; agents can pull full content with dsds_get_entity when needed.
+  const rawIntroInline = process.env['DSDS_INTRO_INLINE'];
+  const introInline = rawIntroInline == null
+    ? true
+    : !/^(false|0|no|off)$/i.test(rawIntroInline.trim());
+
   // PACKAGE_EXPORT_PATHS: comma-separated "packageName=packagePath" pairs.
   // Example: @sanity-labs/ui-poc=/path/to/ui-poc/packages/ui,@sanity/ui=/path/to/sanity-ui/packages/ui
   const rawExportPaths = process.env['PACKAGE_EXPORT_PATHS'];
@@ -75,8 +84,9 @@ export function loadConfig() {
     introPaths,
     packageExportPaths,
     enableFeedback,
+    introInline,
     feedbackDir: rawFeedbackDir ? expandHome(rawFeedbackDir.trim()) : resolve(__dirname, '../feedback'),
     logsDir: rawLogsDir ? expandHome(rawLogsDir.trim()) : resolve(__dirname, '../logs'),
-    schemaVersion: process.env['DSDS_SCHEMA_VERSION'] ?? '0.10.0',
+    schemaVersion: process.env['DSDS_SCHEMA_VERSION'] ?? '0.12.0',
   };
 }

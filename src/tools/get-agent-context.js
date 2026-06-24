@@ -3,14 +3,19 @@ import { getUpdateNotice } from '../spec/version.js';
 export const getAgentContextDef = {
   name: 'dsds_get_agent_context',
   description:
-    'Get the agent-facing context for an entity — its agent-only document blocks (agentDocumentBlocks) plus the hard constraints from its human-facing guidelines. ' +
-    'This is the most LLM-optimized content in a DSDS document. Use it to understand the rules and edge cases for an entity before building with it.',
+    'Get the agent-facing context for an entity — its agent-only document blocks (agentDocumentBlocks), the props table, and the hard constraints from its guidelines. ' +
+    'This is the most LLM-optimized content in a DSDS document. Use it to understand the rules and edge cases for an entity before building with it. ' +
+    'Returns a compact view by default (agent rules + props); pass verbose:true only if you need the full human documentation (use-case prose, sections, code examples).',
   inputSchema: {
     type: 'object',
     properties: {
       identifier: {
         type: 'string',
         description: 'The entity identifier or name.',
+      },
+      verbose: {
+        type: 'boolean',
+        description: 'Default false. When false, returns only the agent-optimized blocks and the props table (much smaller). Set true to also include the full documentation blocks (sections, use-case prose, examples).',
       },
     },
     required: ['identifier'],
@@ -90,7 +95,7 @@ function renderBlock(block, lines) {
   }
 }
 
-export async function getAgentContextHandler({ identifier }, getSystems) {
+export async function getAgentContextHandler({ identifier, verbose = false }, getSystems, getGraph = null) {
   const systems = getSystems();
   if (systems.length === 0) {
     return {
@@ -142,16 +147,56 @@ export async function getAgentContextHandler({ identifier }, getSystems) {
     lines.push(asText(found.description), '');
   }
 
+  // Blast radius up front: what this entity needs (dependencies) and what would
+  // break if you change it (dependents). Derived from the relationship graph.
+  const graph = getGraph ? getGraph() : null;
+  if (graph) {
+    const deps = graph.out.get(found.identifier) ?? [];
+    const dependents = graph.in.get(found.identifier) ?? [];
+    if (deps.length || dependents.length) {
+      lines.push('## Relationships', '');
+      if (deps.length) {
+        lines.push('**This depends on / composes:**');
+        for (const r of deps) lines.push(`- ${r.relation} → \`${r.target}\`${r.required ? ' (required)' : ''}`);
+      }
+      if (dependents.length) {
+        const breaking = dependents.filter(d => d.required);
+        lines.push(`**Used by ${dependents.length} entit${dependents.length === 1 ? 'y' : 'ies'}** — changing this affects them${breaking.length ? `; ${breaking.length} depend on it as required (breaking)` : ''}:`);
+        for (const r of dependents) lines.push(`- ${r.via} ← \`${r.target}\`${r.required ? ' **(breaking)**' : ''}`);
+      }
+      lines.push('');
+    }
+  } else if (found.relationships?.length) {
+    lines.push('## Relationships', '');
+    for (const r of found.relationships) {
+      const req = r.required ? ' (required)' : '';
+      const role = r.role ? ` — ${r.role}` : '';
+      lines.push(`- ${r.relation} → \`${r.target}\`${role}${req}`);
+    }
+    lines.push('');
+  }
+
   if (agentBlocks.length > 0) {
     lines.push('## Agent-optimized context', '');
     for (const block of agentBlocks) renderBlock(block, lines);
   }
 
-  // Render all documentBlocks (minus imports and accessibility which are not relevant for code generation).
+  // Compact (default): only the props table from documentBlocks — props are
+  // essential for correct code, the rest (use-case prose, sections, examples)
+  // is verbose and accumulates in context. Verbose: render everything.
   const docBlocksToRender = docBlocks.filter(b => b.kind !== 'imports' && b.kind !== 'accessibility');
-  if (docBlocksToRender.length > 0) {
-    lines.push('## Full component documentation', '');
-    for (const block of docBlocksToRender) renderBlock(block, lines);
+  if (verbose) {
+    if (docBlocksToRender.length > 0) {
+      lines.push('## Full component documentation', '');
+      for (const block of docBlocksToRender) renderBlock(block, lines);
+    }
+  } else {
+    const apiBlock = docBlocksToRender.find(b => b.kind === 'api');
+    if (apiBlock) renderBlock(apiBlock, lines);
+    const omitted = docBlocksToRender.filter(b => b.kind !== 'api').map(b => b.kind);
+    if (omitted.length > 0) {
+      lines.push(`> ${omitted.length} more documentation block(s) omitted for brevity (${omitted.join(', ')}). Call dsds_get_agent_context with verbose:true, or dsds_get_document_block, if you need them.`, '');
+    }
   }
 
   const notice = getUpdateNotice();

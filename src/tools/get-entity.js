@@ -16,9 +16,10 @@ export const getEntityDef = {
   },
 };
 
-export async function getEntityHandler({ identifier }, getSystems, getSummaries) {
+export async function getEntityHandler({ identifier }, getSystems, getSummaries, getIntro = null, getGraph = null) {
   const systems = getSystems();
-  if (systems.length === 0) {
+  const introEntities = getIntro ? getIntro() : [];
+  if (systems.length === 0 && introEntities.length === 0) {
     return {
       isError: true,
       content: [{ type: 'text', text: 'No DSDS files configured. Set the `DSDS_PATHS` environment variable.' }],
@@ -34,6 +35,15 @@ export async function getEntityHandler({ identifier }, getSystems, getSummaries)
       e => e.identifier?.toLowerCase() === needle || e.name?.toLowerCase() === needle
     );
     if (entity) { found = entity; foundFilePath = system.filePath; break; }
+  }
+
+  // Fall back to intro entities (loaded outside the queried systems) so the
+  // compact-index pointer in the instructions resolves to real content.
+  if (!found) {
+    const intro = introEntities.find(
+      e => e.identifier?.toLowerCase() === needle || e.name?.toLowerCase() === needle
+    );
+    if (intro) { found = intro; foundFilePath = '(intro guide)'; }
   }
 
   if (!found) {
@@ -66,6 +76,47 @@ export async function getEntityHandler({ identifier }, getSystems, getSummaries)
   }
 
   if (found.tokenType) lines.push(`**Token type:** ${found.tokenType}\n`);
+
+  // Relationships: authored outgoing edges (resolved to name/kind) + derived
+  // incoming edges (who points at this entity). Falls back to the raw authored
+  // edges when the graph isn't available.
+  const graph = getGraph ? getGraph() : null;
+  if (graph) {
+    const out = graph.out.get(found.identifier) ?? [];
+    const incoming = graph.in.get(found.identifier) ?? [];
+    if (out.length || incoming.length) {
+      lines.push('## Relationships', '');
+      if (out.length) {
+        lines.push('**Outgoing** (this entity → others):', '');
+        for (const r of out) {
+          const t = graph.nodes.get(r.target);
+          const meta = t ? ` (${t.kind})` : ' *(unresolved)*';
+          const role = r.role ? ` — ${r.role}` : '';
+          const req = r.required ? ' *(required)*' : '';
+          lines.push(`- **${r.relation}** \`${r.target}\`${meta}${role}${req}`);
+        }
+        lines.push('');
+      }
+      if (incoming.length) {
+        lines.push('**Incoming** (others → this entity, derived):', '');
+        for (const r of incoming) {
+          const t = graph.nodes.get(r.target);
+          const meta = t ? ` (${t.kind})` : '';
+          const req = r.required ? ' *(required)*' : '';
+          lines.push(`- **${r.relation}** \`${r.target}\`${meta}${req}`);
+        }
+        lines.push('');
+      }
+    }
+  } else if (found.relationships?.length) {
+    lines.push(`## Relationships`, '');
+    for (const r of found.relationships) {
+      const req = r.required ? ' *(required)*' : '';
+      const role = r.role ? ` — ${r.role}` : '';
+      lines.push(`- **${r.relation}** \`${r.target}\`${role}${req}`);
+    }
+    lines.push('');
+  }
 
   if (found.documentBlocks?.length) {
     lines.push(`## Documentation (${found.documentBlocks.length} block${found.documentBlocks.length !== 1 ? 's' : ''})`, '');

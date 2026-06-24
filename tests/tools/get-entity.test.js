@@ -50,4 +50,12 @@ describe('getEntityHandler', () => {
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('DSDS_PATHS');
   });
+
+  it('falls back to intro entities (so the compact-index pointer resolves)', async () => {
+    const intro = [{ kind: 'guide', identifier: 'getting-started', name: 'Getting Started', documentBlocks: [] }];
+    // No systems, but an intro guide is available via the getIntro accessor.
+    const result = await getEntityHandler({ identifier: 'getting-started' }, () => [], () => [], () => intro);
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0].text).toContain('Getting Started');
+  });
 });

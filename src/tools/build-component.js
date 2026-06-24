@@ -33,24 +33,13 @@ const STEPS = ['start', 'answer', 'finalize'];
 export const buildComponentDef = {
   name: 'dsds_build_component',
   description:
-    'THE REQUIRED WAY to compose any design-system component in code. Whenever you are about to write ' +
-    'JSX for a documented component (e.g. "button", "card") — a new instance, configuring its props, ' +
-    'or adjusting an existing one — call this FIRST and use its output. Do NOT hand-write the JSX or ' +
-    'guess props from memory; this wizard is the canonical source for what props and values are valid. ' +
-    'It reads the live component from the configured DSDS document, walks you through its props one at ' +
-    'a time surfacing ONLY that prop\'s allowed options, and returns ready-to-use, guaranteed-valid JSX. ' +
-    'This is the single most reliable way to produce correct component code and prevents invalid props, ' +
-    'hallucinated options, and deprecated values. Use it for every design-system component you place. ' +
-    '(It reads existing components — it does NOT author documentation; for that use dsds_author_component_doc. ' +
-    'Requires DSDS_PATHS.) FLOW (two calls): 1) call step:"start" with the component "identifier" — you get an ' +
-    'overview plus "questions": the FULL list of props, each with the exact options it allows. 2) call ' +
-    'step:"finalize" with the same "identifier" and an "answers" map { propId: value } — include only the props ' +
-    'you want (omit the rest), use a boolean for flag props and one of the offered option values for enum props. ' +
-    'You do NOT need to echo the "data" object back on finalize; just pass identifier + answers. You get the ' +
-    'composed component in "result.code"; it is design-system-valid by construction (result.lintSafe = true), so ' +
-    'do not lint it. Invalid values are rejected with the allowed set so you can correct and call finalize again. ' +
-    '(Optional: you may instead answer one prop at a time with step:"answer" passing { use, value } and the carried ' +
-    '"data", but the one-shot "answers" map is preferred.)',
+    'THE REQUIRED WAY to compose any design-system component in code. Before writing JSX for a documented ' +
+    'component (e.g. "button", "card") — a new instance, configuring props, or adjusting one — call this and ' +
+    'use its output instead of hand-writing JSX or guessing props. Two calls: step:"start" with an "identifier" ' +
+    'returns the full list of props and each prop\'s allowed values; step:"finalize" with that identifier and an ' +
+    '"answers" map { propId: value } returns ready-to-use JSX in "result.code", guaranteed valid (result.lintSafe ' +
+    '= true — do not lint it). The start response explains the exact fields. Reads existing components; does NOT ' +
+    'author documentation (use dsds_author_component_doc for that). Requires DSDS_PATHS.',
   inputSchema: {
     type: 'object',
     properties: {

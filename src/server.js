@@ -31,6 +31,13 @@ import { checkExportsDef, checkExportsHandler } from './tools/check-exports.js';
 import { toMarkdownDef, toMarkdownHandler } from './tools/to-markdown.js';
 import { buildComponentDef, buildComponentHandler } from './tools/build-component.js';
 import { authorComponentDocDef, authorComponentDocHandler } from './tools/author-component-doc.js';
+import {
+  getDependentsDef, getDependentsHandler,
+  getDependenciesDef, getDependenciesHandler,
+  getAlternativesDef, getAlternativesHandler,
+  impactDef, impactHandler,
+} from './tools/relationships.js';
+import { buildGraph } from './graph.js';
 
 const BASE_INSTRUCTIONS = `
 DSDS MCP — Design System Documentation Spec v${BUNDLED_VERSION}
@@ -49,6 +56,12 @@ DESIGN SYSTEM TOOLS — for querying an existing DSDS document (requires DSDS_PA
 - dsds_get_agent_context(identifier) — get LLM-optimized rules and constraints for a specific entity
 - dsds_get_chunk(identifier) — get a pre-assembled code chunk for a common use case, along with its guidelines and use cases rendered for agent use
 - dsds_build_component(step:"start", identifier:"button") — interactive wizard that walks an existing component's props one at a time, offering only each prop's valid options as Q&A, then returns the composed JSX in result.code
+
+RELATIONSHIP GRAPH — typed dependency edges between entities (composes, depends-on, part-of, alternative-to, replaces, extends), with inverse edges derived automatically:
+- dsds_impact(identifier) — blast radius: what breaks if you change/remove this entity (direct + transitive dependents, required edges flagged). Start here before changing a shared token or component.
+- dsds_get_dependents(identifier, { relation?, transitive? }) — what points AT this entity.
+- dsds_get_dependencies(identifier, { relation?, transitive? }) — what this entity needs / is built from.
+- dsds_get_alternatives(identifier) — interchangeable options and replacements; surfaces deprecations.
 
 RESOURCES: Each design system entity is also available as a resource at dsds://entity/{identifier}.
 
@@ -177,6 +190,30 @@ function renderSectionItem(item, depth, lines) {
   for (const sub of (item.sections ?? [])) renderSectionItem(sub, depth + 1, lines);
 }
 
+// Compact alternative to inlining the full intro entities: a one-line index.
+function renderIntroIndex(entities) {
+  if (!entities.length) return null;
+  const lines = ['---', '', '## Design system guides', '', 'Fetch full content with `dsds_get_entity(identifier)` when needed:', ''];
+  for (const e of entities) {
+    const name = e.name ?? e.identifier;
+    const summary = introSummary(e);
+    lines.push(`- **${name}** (\`${e.identifier}\`)${summary ? ` — ${summary}` : ''}`);
+  }
+  return lines.join('\n');
+}
+
+function introSummary(entity) {
+  let s = '';
+  if (Array.isArray(entity.metadata)) {
+    const d = entity.metadata.find(m => m.kind === 'description');
+    if (d?.value) s = d.value;
+  }
+  if (!s && typeof entity.description === 'string') s = entity.description;
+  if (!s && entity.agents?.intent) s = entity.agents.intent;
+  s = (s || '').split('\n')[0].trim();
+  return s.length > 140 ? s.slice(0, 139) + '…' : s;
+}
+
 function validateArgs(toolDef, args) {
   const { required = [], properties = {} } = toolDef.inputSchema ?? {};
 
@@ -211,14 +248,37 @@ function promptMessage(text) {
   return { role: 'user', content: { type: 'text', text } };
 }
 
-export function createServer(getSystems, getSummaries, introEntities = [], getLintConfig = null, getExportPaths = null, feedbackDir = null, logsDir = null, enableFeedback = true) {
-  const introTexts = introEntities.map(renderIntroEntity).filter(Boolean);
+export function createServer(getSystems, getSummaries, introEntities = [], getLintConfig = null, getExportPaths = null, feedbackDir = null, logsDir = null, enableFeedback = true, introInline = true) {
   const baseWithFeedback = enableFeedback
     ? `${BASE_INSTRUCTIONS}\n\n${FEEDBACK_INSTRUCTION}`
     : BASE_INSTRUCTIONS;
-  const INSTRUCTIONS = introTexts.length > 0
-    ? `${baseWithFeedback}\n\n${introTexts.join('\n\n')}`
+  // Inline (default): render each intro entity in full into the prompt. Compact:
+  // inject a one-line index and let agents fetch full content via dsds_get_entity.
+  let introBlock = null;
+  if (introEntities.length > 0) {
+    introBlock = introInline
+      ? introEntities.map(renderIntroEntity).filter(Boolean).join('\n\n') || null
+      : renderIntroIndex(introEntities);
+  }
+  const INSTRUCTIONS = introBlock
+    ? `${baseWithFeedback}\n\n${introBlock}`
     : baseWithFeedback;
+
+  // Lets get_entity reach intro entities (they live outside the queried systems),
+  // so the compact-index pointer above resolves to real content on demand.
+  const getIntro = () => introEntities;
+
+  // The relationship graph is an in-memory index rebuilt only when the loaded
+  // systems change (the watcher swaps state.systems for a new array, so we key
+  // the cache on that array's identity). Cost is O(edges) on rebuild, zero otherwise.
+  let graphCache = { ref: null, graph: null };
+  const getGraph = () => {
+    const systems = getSystems();
+    if (graphCache.ref !== systems) {
+      graphCache = { ref: systems, graph: buildGraph(systems.flatMap(s => s.entities)) };
+    }
+    return graphCache.graph;
+  };
 
   const server = new Server(
     { name: 'dsds-mcp', version: '0.1.0' },
@@ -242,6 +302,10 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
     getDocumentBlockDef,
     getAgentContextDef,
     getChunkDef,
+    getDependentsDef,
+    getDependenciesDef,
+    getAlternativesDef,
+    impactDef,
     lintCodeDef,
     checkExportsDef,
     toMarkdownDef,
@@ -271,11 +335,15 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
         case 'dsds_author_component_doc': return authorComponentDocHandler(args);
         case 'dsds_validate':             return validateHandler(args);
         case 'dsds_list_entities':        return listEntitiesHandler(args, getSystems, getSummaries);
-        case 'dsds_get_entity':           return getEntityHandler(args, getSystems, getSummaries);
+        case 'dsds_get_entity':           return getEntityHandler(args, getSystems, getSummaries, getIntro, getGraph);
         case 'dsds_search_entities':      return searchEntitiesHandler(args, getSystems, getSummaries);
         case 'dsds_get_document_block':   return getDocumentBlockHandler(args, getSystems);
-        case 'dsds_get_agent_context':    return getAgentContextHandler(args, getSystems);
+        case 'dsds_get_agent_context':    return getAgentContextHandler(args, getSystems, getGraph);
         case 'dsds_get_chunk':            return getChunkHandler(args, getSystems, logsDir);
+        case 'dsds_get_dependents':       return getDependentsHandler(args, getGraph);
+        case 'dsds_get_dependencies':     return getDependenciesHandler(args, getGraph);
+        case 'dsds_get_alternatives':     return getAlternativesHandler(args, getGraph);
+        case 'dsds_impact':               return impactHandler(args, getGraph);
         case 'dsds_lint_code':            return lintCodeHandler(args, getLintConfig ?? (() => ({ plugins: [], resolveDir: process.cwd() })), logsDir);
         case 'dsds_check_exports':        return checkExportsHandler(args, getExportPaths ?? (() => new Map()));
         case 'dsds_to_markdown':          return toMarkdownHandler(args, getSystems);

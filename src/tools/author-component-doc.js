@@ -74,24 +74,13 @@ const STEPS = [
 export const authorComponentDocDef = {
   name: 'dsds_author_component_doc',
   description:
-    'Interactive wizard that guides you step-by-step through AUTHORING a DSDS-compliant ' +
-    'COMPONENT DOCUMENT (a documentation JSON entity in DSDS format). ' +
-    'This AUTHORS DOCUMENTATION — it does NOT generate, scaffold, or implement a ' +
-    'component\'s UI/React/source code, and it always starts a NEW document from scratch (it does ' +
-    'not read or edit an existing component). To IMPLEMENT UI from a component that already exists ' +
-    'in the design system, use dsds_build_component (an interactive prop-by-prop wizard) instead. ' +
-    'USE THIS WHEN: you want to create/author the DSDS documentation for a component ' +
-    'and would rather be guided than hand-write JSON, or you do not know the DSDS schema — the ' +
-    'wizard supplies the valid field values at each step and the output is guaranteed to pass ' +
-    'validation. DO NOT use for other entity kinds (token, theme, foundation, pattern, guide, ' +
-    'chunk) or a multi-entity system — use dsds_spec_scaffold for those. If you already know the ' +
-    'DSDS schema and prefer to fill in a template yourself, use dsds_spec_scaffold(kind:"component") ' +
-    'instead. Always start with step: "start" and no data. Each response tells you the exact next ' +
-    'step ("nextStepId"), the fields to populate ("nextStepFields", with "allowedValues" for every ' +
-    'closed enum), and returns the full accumulated "data" object — pass it back verbatim on the ' +
-    'next call. You are done when "result" is present (the finalize step). Calling any step with ' +
-    'missing data returns that step\'s field schema instead of an error, so you can probe a step ' +
-    'to discover what it needs.',
+    'Step-by-step wizard for AUTHORING a DSDS COMPONENT DOCUMENT (a documentation JSON entity) from scratch. ' +
+    'This writes DOCUMENTATION — it does NOT generate or implement a component\'s UI/source code; to implement ' +
+    'an existing component in code use dsds_build_component instead. Use when you want to be guided through ' +
+    'documenting a component without knowing the DSDS schema; the wizard supplies valid field values and the ' +
+    'output passes validation. For other entity kinds (token, theme, foundation, pattern, guide, chunk) or a ' +
+    'multi-entity system use dsds_spec_scaffold. Start with step:"start" and no data; each response gives the ' +
+    'next step and fields to populate, and you are done when "result" is present.',
   inputSchema: {
     type: 'object',
     properties: {

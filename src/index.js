@@ -61,6 +61,7 @@ async function main() {
     config.feedbackDir,
     config.logsDir,
     config.enableFeedback,
+    config.introInline,
   );
 
   startWatching(config.paths, state);
