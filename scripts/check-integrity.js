@@ -2,13 +2,14 @@
 /**
  * DSDS integrity guard. Fails (exit 1) when a reference DSDS could return to an
  * agent is broken:
- *   - an @sanity/icons import in chunk code that is not a real export
+ *   - an icon import (from the configured ICON_PACKAGE) that is not a real export
  *   - a brief directing agents to an entity kind that returns nothing
  *   - a spec-version string that has drifted from the bundled version
  *
- * Run it with the same env the MCP uses (DSDS_PATHS, PACKAGE_EXPORT_PATHS):
- *   DSDS_PATHS=/path/to/sanity-ui.dsds.json \
- *   PACKAGE_EXPORT_PATHS=@sanity/icons=/path/to/@sanity/icons \
+ * Run it with the same env the MCP uses (DSDS_PATHS, ICON_PACKAGE, PACKAGE_EXPORT_PATHS):
+ *   DSDS_PATHS=/path/to/your.dsds.json \
+ *   ICON_PACKAGE=@your-org/icons \
+ *   PACKAGE_EXPORT_PATHS=@your-org/icons=/path/to/@your-org/icons \
  *   node scripts/check-integrity.js
  *
  * Checks whose inputs aren't configured are skipped with a warning rather than
@@ -43,19 +44,22 @@ if (cfg.paths.length) {
   warnings.push('DSDS_PATHS not set — skipping icon-import and kind-reference checks.');
 }
 
-// ── R1: every icon import resolves to a real @sanity/icons export ────────────
-const iconsPath = cfg.packageExportPaths.get('@sanity/icons');
+// ── R1: every icon import resolves to a real export of the configured icon package ──
+const iconPackage = cfg.iconPackage;
+const iconsPath = iconPackage ? cfg.packageExportPaths.get(iconPackage) : null;
 if (chunks.length) {
-  if (iconsPath) {
+  if (!iconPackage) {
+    warnings.push('ICON_PACKAGE not set — skipping icon-import check.');
+  } else if (iconsPath) {
     try {
       const exports = parseIconExports(readFileSync(join(iconsPath, 'dist/index.d.ts'), 'utf8'));
-      if (exports.size) errors.push(...checkIconImports(chunks, exports));
+      if (exports.size) errors.push(...checkIconImports(chunks, exports, iconPackage));
       else warnings.push(`No icon exports parsed from ${iconsPath} — skipping icon check.`);
     } catch (err) {
-      warnings.push(`Could not read @sanity/icons exports (${iconsPath}): ${err.message}`);
+      warnings.push(`Could not read ${iconPackage} exports (${iconsPath}): ${err.message}`);
     }
   } else {
-    warnings.push('PACKAGE_EXPORT_PATHS has no @sanity/icons entry — skipping icon-import check.');
+    warnings.push(`PACKAGE_EXPORT_PATHS has no ${iconPackage} entry — skipping icon-import check.`);
   }
 }
 

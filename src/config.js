@@ -61,7 +61,7 @@ export function loadConfig() {
     : !/^(false|0|no|off)$/i.test(rawIntroInline.trim());
 
   // PACKAGE_EXPORT_PATHS: comma-separated "packageName=packagePath" pairs.
-  // Example: @sanity-labs/ui-poc=/path/to/ui-poc/packages/ui,@sanity/ui=/path/to/sanity-ui/packages/ui
+  // Example: @your-org/ui=/path/to/your-ui/packages/ui,@your-org/icons=/path/to/your-icons
   const rawExportPaths = process.env['PACKAGE_EXPORT_PATHS'];
   const packageExportPaths = new Map();
   if (rawExportPaths) {
@@ -75,6 +75,12 @@ export function loadConfig() {
     }
   }
 
+  // ICON_PACKAGE: the package name whose exports the integrity guard treats as the
+  // icon set (e.g. "@acme/icons"). When set, chunk code that imports from this
+  // package is checked against its real exports. Unset (default) → no icon check.
+  const rawIconPackage = process.env['ICON_PACKAGE'];
+  const iconPackage = rawIconPackage ? rawIconPackage.trim() : null;
+
   return {
     paths,
     lintPaths,
@@ -83,6 +89,7 @@ export function loadConfig() {
     lintSourceDir,
     introPaths,
     packageExportPaths,
+    iconPackage,
     enableFeedback,
     introInline,
     feedbackDir: rawFeedbackDir ? expandHome(rawFeedbackDir.trim()) : resolve(__dirname, '../feedback'),

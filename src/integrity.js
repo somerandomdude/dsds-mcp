@@ -4,19 +4,24 @@
  * (empty = pass).
  *
  * Covers the three reference classes from the integrity PRD:
- *   1. every @sanity/icons import in chunk code resolves to a real export
+ *   1. every import from the configured icon package (ICON_PACKAGE) resolves to a real export
  *   2. no brief directs agents to an entity kind that returns nothing
  *   3. one spec version across every source
  */
 
-const ICON_IMPORT_BLOCK = /import\s*\{([^}]*)\}\s*from\s*['"]@sanity\/icons['"]/g;
+/** Build the `import { … } from '<pkg>'` matcher for a given package name. */
+function iconImportBlock(iconPackage) {
+  const escaped = iconPackage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`import\\s*\\{([^}]*)\\}\\s*from\\s*['"]${escaped}['"]`, 'g');
+}
 
-/** Extract the imported names from every `import { … } from '@sanity/icons'`. */
-export function extractSanityIconImports(code) {
+/** Extract the imported names from every `import { … } from '<iconPackage>'`. */
+export function extractIconImports(code, iconPackage) {
   const names = new Set();
-  ICON_IMPORT_BLOCK.lastIndex = 0;
+  if (!iconPackage) return [];
+  const re = iconImportBlock(iconPackage);
   let m;
-  while ((m = ICON_IMPORT_BLOCK.exec(code ?? '')) !== null) {
+  while ((m = re.exec(code ?? '')) !== null) {
     for (const part of m[1].split(',')) {
       // Strip comments, whitespace, and `as` aliases → the source export name.
       const name = part.replace(/\/\/.*$/gm, '').trim().split(/\s+as\s+/)[0].trim();
@@ -26,7 +31,7 @@ export function extractSanityIconImports(code) {
   return [...names];
 }
 
-/** Parse exported icon names from a @sanity/icons `dist/index.d.ts` string. */
+/** Parse exported icon names from the icon package's `dist/index.d.ts` string. */
 export function parseIconExports(dts) {
   const set = new Set();
   const re = /(?:export\s+)?declare const\s+([A-Z][A-Za-z0-9]*Icon)\b/g;
@@ -35,13 +40,13 @@ export function parseIconExports(dts) {
   return set;
 }
 
-/** Flag any icon import in chunk code that is not a real @sanity/icons export. */
-export function checkIconImports(chunks, iconExports) {
+/** Flag any icon import in chunk code that is not a real export of the icon package. */
+export function checkIconImports(chunks, iconExports, iconPackage) {
   const errors = [];
   for (const { identifier, code } of chunks) {
-    for (const name of extractSanityIconImports(code)) {
+    for (const name of extractIconImports(code, iconPackage)) {
       if (!iconExports.has(name)) {
-        errors.push(`Chunk "${identifier}" imports "${name}" from @sanity/icons, which is not an export.`);
+        errors.push(`Chunk "${identifier}" imports "${name}" from ${iconPackage}, which is not an export.`);
       }
     }
   }

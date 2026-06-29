@@ -3,16 +3,20 @@ import { execFileSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  extractSanityIconImports, parseIconExports, checkIconImports,
+  extractIconImports, parseIconExports, checkIconImports,
   checkKindReferences, checkVersions, readmeVersions,
 } from '../src/integrity.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ICON_PKG = '@acme/icons';
 
-describe('extractSanityIconImports', () => {
+describe('extractIconImports', () => {
   it('parses single, multi-line, and aliased imports; ignores other packages', () => {
-    const code = "import { AddIcon, CloseIcon } from '@sanity/icons'\nimport {\n  SortIcon as S,\n} from '@sanity/icons'\nimport { Box } from '@sanity-labs/ui-poc'";
-    expect(extractSanityIconImports(code).sort()).toEqual(['AddIcon', 'CloseIcon', 'SortIcon']);
+    const code = "import { AddIcon, CloseIcon } from '@acme/icons'\nimport {\n  SortIcon as S,\n} from '@acme/icons'\nimport { Box } from '@acme/ui'";
+    expect(extractIconImports(code, ICON_PKG).sort()).toEqual(['AddIcon', 'CloseIcon', 'SortIcon']);
+  });
+  it('returns nothing when no icon package is configured', () => {
+    expect(extractIconImports("import { AddIcon } from '@acme/icons'", null)).toEqual([]);
   });
 });
 
@@ -29,10 +33,10 @@ describe('parseIconExports', () => {
 describe('checkIconImports', () => {
   const exports = new Set(['AddIcon', 'SortIcon']);
   it('passes when every import resolves', () => {
-    expect(checkIconImports([{ identifier: 'c', code: "import { AddIcon } from '@sanity/icons'" }], exports)).toEqual([]);
+    expect(checkIconImports([{ identifier: 'c', code: "import { AddIcon } from '@acme/icons'" }], exports, ICON_PKG)).toEqual([]);
   });
   it('flags an unresolved (hallucinated) icon, naming the chunk', () => {
-    const errs = checkIconImports([{ identifier: 'toolbar', code: "import { FakeIcon } from '@sanity/icons'" }], exports);
+    const errs = checkIconImports([{ identifier: 'toolbar', code: "import { FakeIcon } from '@acme/icons'" }], exports, ICON_PKG);
     expect(errs).toHaveLength(1);
     expect(errs[0]).toContain('FakeIcon');
     expect(errs[0]).toContain('toolbar');
