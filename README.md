@@ -2,9 +2,10 @@
 
 An MCP server for the [Design System Documentation Spec (DSDS)](https://designsystemdocspec.org). Exposes DSDS tooling to any MCP-compatible client (Claude Desktop, Cursor, etc.).
 
-Two use cases:
+Three use cases:
 - **Authoring** — help a team document their design system in DSDS format
-- **Consumption** — let agents query an existing DSDS document to build with the design system
+- **Building** — let agents query an existing DSDS document to build UI with the design system
+- **Answering** — let agents answer questions about how to use the design system, grounded in its authored documentation
 
 The DSDS spec is bundled at the version listed below. The server checks for updates on startup and surfaces a notice in tool responses when a newer version is available.
 
@@ -267,7 +268,7 @@ These help a team author DSDS-compliant documentation.
 
 | Tool | Description |
 |------|-------------|
-| `dsds_context_brief` | **Start here.** A structured briefing for the current use case — `"author"` (documenting a design system) or `"build"` (implementing UI with it). Call this before any other tool. |
+| `dsds_context_brief` | **Start here.** A structured briefing for the current use case — `"author"` (documenting a design system), `"build"` (implementing UI with it), or `"ask"` (answering a question about how to use it). Call this before any other tool. |
 | `dsds_spec_overview` | Overview of DSDS: entity types, structure, and authoring workflow |
 | `dsds_spec_entity_schema` | Full field definitions for a given entity kind (`component`, `token`, `theme`, etc.) |
 | `dsds_spec_document_blocks` | Document block types valid for an entity kind, with descriptions |
@@ -296,6 +297,11 @@ These let agents query an existing DSDS document.
 **Query workflow:**
 ```
 dsds_context_brief(useCase="build") → dsds_list_entities → dsds_search_entities → dsds_get_agent_context or dsds_get_entity
+```
+
+**Answer workflow** (answering a question about using the design system):
+```
+dsds_context_brief(useCase="ask") → dsds_search_entities → dsds_get_agent_context → grounded, cited answer
 ```
 
 For layouts and shells, check blueprints first:

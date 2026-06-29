@@ -71,4 +71,28 @@ describe('contextBriefHandler', () => {
       expect(result.content[0].text).not.toContain('entities loaded');
     });
   });
+
+  describe('ask use case', () => {
+    it('returns the ask brief', async () => {
+      const result = await contextBriefHandler({ useCase: 'ask' }, () => [], () => []);
+      expect(result.content[0].text).toContain('Before you answer');
+      expect(result.isError).toBeFalsy();
+    });
+
+    it('prepends a task header when task is provided', async () => {
+      const result = await contextBriefHandler(
+        { useCase: 'ask', task: 'how do I lay out a form?' },
+        () => [], () => []
+      );
+      expect(result.content[0].text).toContain('Your task: how do I lay out a form?');
+    });
+
+    it('includes system status so answers reflect what is loaded', async () => {
+      const { systems } = await loadSystems([`${fixturesDir}/tokens.dsds.json`]);
+      const result = await contextBriefHandler({ useCase: 'ask' }, ...makeGetters(systems));
+      expect(result.content[0].text).toContain('entities loaded');
+      // deprecated entities must be surfaced so they aren't recommended
+      expect(result.content[0].text).toContain('color-grey-100');
+    });
+  });
 });

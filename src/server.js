@@ -9,7 +9,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { BUNDLED_VERSION } from './spec/version.js';
-import { BUILD_BRIEF, AUTHOR_BRIEF, PROMPT_META } from './briefs.js';
+import { BUILD_BRIEF, AUTHOR_BRIEF, ASK_BRIEF, PROMPT_META } from './briefs.js';
 import { listResources, readResource } from './resources.js';
 import { writeLog } from './logger.js';
 
@@ -48,6 +48,7 @@ DSDS MCP — Design System Documentation Spec v${BUNDLED_VERSION}
 START HERE: Call dsds_context_brief first to get a full briefing before any work begins.
 - dsds_context_brief(useCase="build") — before implementing UI with the design system. To implement an existing component interactively, use dsds_build_component (a prop-by-prop wizard, listed under DESIGN SYSTEM TOOLS); for one-shot context use dsds_get_chunk / dsds_get_entity / dsds_get_agent_context.
 - dsds_context_brief(useCase="author") — before documenting a design system in DSDS format
+- dsds_context_brief(useCase="ask") — before answering a question about how to use the design system (a retrieval-and-answer loop: search → get_agent_context → grounded, cited answer; produces an answer, not code)
 
 SPEC TOOLS — for authoring DSDS-compliant documentation (always available, no configuration needed):
 - dsds_spec_overview → dsds_spec_entity_schema → dsds_spec_scaffold → dsds_spec_document_blocks → dsds_validate
@@ -401,6 +402,11 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
       description: PROMPT_META.author.description,
       arguments: [{ name: 'task', description: PROMPT_META.author.taskArgDescription, required: false }],
     },
+    {
+      name: PROMPT_META.ask.name,
+      description: PROMPT_META.ask.description,
+      arguments: [{ name: 'task', description: PROMPT_META.ask.taskArgDescription, required: false }],
+    },
   ];
 
   if (introEntities.length > 0) {
@@ -429,6 +435,13 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
       const lines = [];
       if (task) lines.push(`## Your task: ${task}`, '');
       lines.push(AUTHOR_BRIEF);
+      return { messages: [promptMessage(lines.join('\n'))] };
+    }
+
+    if (name === PROMPT_META.ask.name) {
+      const lines = [];
+      if (task) lines.push(`## Your question: ${task}`, '');
+      lines.push(ASK_BRIEF);
       return { messages: [promptMessage(lines.join('\n'))] };
     }
 
