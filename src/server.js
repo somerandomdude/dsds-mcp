@@ -29,6 +29,9 @@ import { getChunkDef, getChunkHandler } from './tools/get-chunk.js';
 import { feedbackDef, feedbackHandler } from './tools/feedback.js';
 import { checkExportsDef, checkExportsHandler } from './tools/check-exports.js';
 import { toMarkdownDef, toMarkdownHandler } from './tools/to-markdown.js';
+import { getCatalogDef, getCatalogHandler } from './tools/get-catalog.js';
+import { validateUiDef, validateUiHandler } from './tools/validate-ui.js';
+import { renderUiDef, renderUiHandler } from './tools/render-ui.js';
 import { buildComponentDef, buildComponentHandler } from './tools/build-component.js';
 import { authorComponentDocDef, authorComponentDocHandler } from './tools/author-component-doc.js';
 import {
@@ -74,6 +77,11 @@ LINT TOOLS — for linting code against configured ESLint plugins (requires LINT
 
 EXPORT CHECK — before importing a component, confirm it exists in the package (requires PACKAGE_EXPORT_PATHS):
 - dsds_check_exports(components=["Box", "TextInput"]) — verify each name is actually exported
+
+GENERATIVE UI (PROTOTYPE) — constrain AI-generated UI to the design system:
+- dsds_get_catalog() — the components and the props a model may emit, generated from DSDS. Draft components and React-typed/excluded props (e.g. Card \`padding\`) are omitted; spacing and radius are constrained to the token scales. Use format:"json-schema" for the UI-spec schema or format:"zod" for a defineCatalog source.
+- dsds_validate_ui(spec) — validate a generated { root, elements } spec against the catalog and get recovery hints (e.g. "Card: prop padding is not allowed").
+- dsds_render_ui(spec) — validate the spec, then emit a complete runnable Vite app (registry + renderer + spec) that renders it with real @sanity-labs/ui-poc components. The bridge from spec to rendered UI.
 `.trim();
 
 // Appended to the instructions only when the feedback tool is enabled.
@@ -309,6 +317,9 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
     lintCodeDef,
     checkExportsDef,
     toMarkdownDef,
+    getCatalogDef,
+    validateUiDef,
+    renderUiDef,
     ...(enableFeedback ? [feedbackDef] : []),
   ];
 
@@ -347,6 +358,9 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
         case 'dsds_lint_code':            return lintCodeHandler(args, getLintConfig ?? (() => ({ plugins: [], resolveDir: process.cwd() })), logsDir);
         case 'dsds_check_exports':        return checkExportsHandler(args, getExportPaths ?? (() => new Map()));
         case 'dsds_to_markdown':          return toMarkdownHandler(args, getSystems);
+        case 'dsds_get_catalog':          return getCatalogHandler(args, getSystems);
+        case 'dsds_validate_ui':          return validateUiHandler(args, getSystems);
+        case 'dsds_render_ui':            return renderUiHandler(args, getSystems);
         case 'dsds_feedback':             return feedbackHandler(args, feedbackDir);
         default:                          return errorResponse(`Unknown tool: "${name}"`);
       }

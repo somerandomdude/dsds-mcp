@@ -76,8 +76,9 @@ add a component to code. This is the required way of adding components.
 
 ### Step 5 — Use tokens, not hardcoded values
 
-Call \`dsds_search_entities\` with \`kind=token\` or \`kind=token-group\` to find
-the design tokens that apply to your work.
+Call \`dsds_search_entities\` with \`kind=token-group\` to find the design token
+scales that apply to your work (spacing, radius, typography, and the rest). Open
+a group with \`dsds_get_entity\` to see its individual tokens.
 
 Never hardcode color values, spacing, or type sizes. Always reference the
 token identifier from the design system.
@@ -93,6 +94,22 @@ If a chunk matches, call \`dsds_get_chunk(identifier)\` to retrieve the full cod
 ---
 
 Only after completing these steps should you write code.
+
+---
+
+### Step 7 — Validate and repair before you finish (required)
+
+Writing the code is not the end. Before you consider the work done, run an
+ordered, repeating check and fix what it finds — do not skip a stage and do not
+stop at the first green light:
+
+1. **Lint.** Call \`dsds_lint_code\` with every file you wrote (use the \`files\` array). Apply the corrected code it returns, then resolve any remaining violations it reports. Lint is not optional or advisory — design-system rules only fire on real JSX, so lint your final component code, not a stub.
+2. **Build / render.** Make sure the app actually mounts and renders without console or runtime errors. A file that type-checks but throws on render has not passed.
+3. **Accessibility.** Resolve accessibility issues (labels, landmarks, alt text, ARIA, and color contrast) so the rendered UI is usable by assistive technology.
+
+If a later stage forces a change, re-run from lint — a fix can reintroduce an
+earlier problem. Treat this loop as part of building the component, not a
+separate QA pass someone else will do.
 `.trim();
 
 

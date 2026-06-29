@@ -14,6 +14,7 @@
     "dev": "node src/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check:integrity": "node scripts/check-integrity.js",
     "update-schema": "node scripts/update-schema.js",
     "logs": "node scripts/view-logs.js"
   },

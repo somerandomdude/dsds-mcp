@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { writeLog } from '../logger.js';
 
 // Session-level lint result cache. An agent can pass { cacheKey, filename } instead of
@@ -141,6 +141,10 @@ export const lintCodeDef = {
       path: {
         type: 'string',
         description: 'Single-file mode: path to a file already on disk (relative to the lint project root). Pass this instead of `code` to avoid re-sending its contents.',
+      },
+      apply: {
+        type: 'boolean',
+        description: 'Write auto-fixed code back to disk for files passed by `path`. For harness/automation use (lint as a non-skippable gate); agents copy the corrected code from the response instead.',
       },
     },
   },
@@ -325,6 +329,11 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
       // output is only set when at least one fix was applied
       const fixedCode = r?.output ?? null;
       const fixed = fixedCode !== null;
+      // Harness mode: write the auto-fixed code back to the file on disk so the
+      // lint gate's fixes are applied without the caller re-emitting source.
+      if (args.apply && file.path && fixedCode != null) {
+        try { await writeFile(filePath, fixedCode, 'utf-8'); } catch { /* best effort */ }
+      }
       const messages = (r?.messages ?? []).map(m => ({
         ruleId: m.ruleId,
         severity: m.severity,
@@ -490,5 +499,18 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
     lines.push('');
   }
 
-  return { content: [{ type: 'text', text: lines.join('\n') }] };
+  return {
+    content: [{ type: 'text', text: lines.join('\n') }],
+    // Structured mirror for automation (the agent-tester lint gate). Agents read
+    // the text above; the harness reads this.
+    structuredContent: {
+      remaining: totalRemaining,
+      files: fileResults.map((f) => ({
+        filename: f.filename,
+        fixed: !!f.fixed,
+        messages: f.messages ?? [],
+        error: f.error ?? null,
+      })),
+    },
+  };
 }
