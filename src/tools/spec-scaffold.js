@@ -6,7 +6,7 @@ const SCAFFOLD_KINDS = [...ENTITY_KINDS, 'system'];
 export const specScaffoldDef = {
   name: 'dsds_spec_scaffold',
   description:
-    'Generate a minimal valid DSDS JSON template for a given entity kind. Use "system" to get a multi-entity document starter. Fill in the placeholders and add documentBlocks incrementally, then validate with dsds_validate.',
+    'Generate a minimal valid DSDS JSON template for a given entity kind, to fill in yourself. USE THIS WHEN: you know the DSDS schema and prefer to edit a template directly, or you need any entity kind other than a component (token, theme, foundation, pattern, guide, chunk) or a multi-entity "system" starter. For a COMPONENT document, prefer dsds_author_component_doc — an interactive, guided wizard that supplies valid field values step by step and needs no schema knowledge. Fill in the placeholders and add documentBlocks incrementally, then validate with dsds_validate.',
   inputSchema: {
     type: 'object',
     properties: {

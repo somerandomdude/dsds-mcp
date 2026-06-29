@@ -30,10 +30,10 @@ export function checkExportsHandler({ components }, getExportPaths) {
           'No packages configured for export checking.',
           '',
           'Set PACKAGE_EXPORT_PATHS in your MCP config:',
-          '  PACKAGE_EXPORT_PATHS=@sanity-labs/ui-poc=/path/to/ui-poc/packages/ui',
+          '  PACKAGE_EXPORT_PATHS=@your-org/ui=/path/to/your-ui/packages/ui',
           '',
           'Multiple packages (comma-separated):',
-          '  PACKAGE_EXPORT_PATHS=@sanity-labs/ui-poc=/path/to/ui-poc/packages/ui,@sanity/ui=/path/to/sanity-ui/packages/ui',
+          '  PACKAGE_EXPORT_PATHS=@your-org/ui=/path/to/your-ui/packages/ui,@your-org/icons=/path/to/your-icons',
         ].join('\n'),
       }],
     };

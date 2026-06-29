@@ -1,4 +1,4 @@
-import { BUILD_BRIEF, AUTHOR_BRIEF } from '../briefs.js';
+import { BUILD_BRIEF, AUTHOR_BRIEF, ASK_BRIEF } from '../briefs.js';
 import { getUpdateNotice } from '../spec/version.js';
 
 export const contextBriefDef = {
@@ -7,14 +7,15 @@ export const contextBriefDef = {
     'Get a structured briefing of everything you need to know before starting work. ' +
     'Use useCase="build" before implementing UI with the design system. ' +
     'Use useCase="author" before documenting a design system in DSDS format. ' +
+    'Use useCase="ask" before answering a question about how to use the design system. ' +
     'Call this first — before any other tool.',
   inputSchema: {
     type: 'object',
     properties: {
       useCase: {
         type: 'string',
-        enum: ['build', 'author'],
-        description: '"build" — implementing UI with the design system. "author" — writing DSDS documentation.',
+        enum: ['build', 'author', 'ask'],
+        description: '"build" — implementing UI with the design system. "author" — writing DSDS documentation. "ask" — answering a question about using the design system.',
       },
       task: {
         type: 'string',
@@ -26,7 +27,7 @@ export const contextBriefDef = {
 };
 
 export async function contextBriefHandler({ useCase, task }, getSystems, getSummaries) {
-  const brief = useCase === 'build' ? BUILD_BRIEF : AUTHOR_BRIEF;
+  const brief = useCase === 'build' ? BUILD_BRIEF : useCase === 'ask' ? ASK_BRIEF : AUTHOR_BRIEF;
   const sections = [];
 
   if (task) {
@@ -35,7 +36,9 @@ export async function contextBriefHandler({ useCase, task }, getSystems, getSumm
 
   sections.push(brief);
 
-  if (useCase === 'build') {
+  // Both building and answering benefit from knowing what's loaded and what's
+  // deprecated; authoring works against the spec, not a loaded system.
+  if (useCase === 'build' || useCase === 'ask') {
     const systemStatus = buildSystemStatus(getSystems, getSummaries);
     if (systemStatus) {
       sections.push('', '---', '', systemStatus);

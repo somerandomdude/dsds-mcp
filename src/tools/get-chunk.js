@@ -1,22 +1,10 @@
-import { appendFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
-
-async function writeChunkLog(logsDir, identifier, name) {
-  if (!logsDir) return;
-  try {
-    await mkdir(logsDir, { recursive: true });
-    const date = new Date().toISOString().slice(0, 10);
-    const logPath = join(logsDir, `${date}.jsonl`);
-    const entry = { timestamp: new Date().toISOString(), tool: 'dsds_get_chunk', identifier, name };
-    await appendFile(logPath, JSON.stringify(entry) + '\n', 'utf-8');
-  } catch { /* best-effort */ }
-}
+import { writeLog } from '../logger.js';
 
 export const getChunkDef = {
   name: 'dsds_get_chunk',
   description:
     'Get a chunk by identifier, rendered for agent use. Returns the code block (ready to copy), ' +
-    'guidelines, use cases, and composed-component links. ' +
+    'guidelines, use cases, and its relationships (composes / depends-on / alternative-to edges). ' +
     'Use this instead of dsds_get_entity when working with chunk entities.',
   inputSchema: {
     type: 'object',
@@ -99,13 +87,13 @@ export async function getChunkHandler({ identifier }, getSystems, logsDir = null
     '',
   );
 
-  const componentLinks = resolveComponentLinks(meta);
-  if (componentLinks.length > 0) {
-    lines.push('## Composed Components', '');
-    for (const link of componentLinks) {
-      const req = link.required ? ' *(required)*' : '';
-      const role = link.role ? ` — ${link.role}` : '';
-      lines.push(`- \`${link.identifier}\`${role}${req}`);
+  const relationships = resolveRelationships(chunk);
+  if (relationships.length > 0) {
+    lines.push('## Relationships', '');
+    for (const r of relationships) {
+      const req = r.required ? ' *(required)*' : '';
+      const role = r.role ? ` — ${r.role}` : '';
+      lines.push(`- **${r.relation}** \`${r.target}\`${role}${req}`);
     }
     lines.push('');
   }
@@ -143,7 +131,7 @@ export async function getChunkHandler({ identifier }, getSystems, logsDir = null
     lines.push('');
   }
 
-  await writeChunkLog(logsDir, chunk.identifier, chunk.name);
+  await writeLog(logsDir, { type: 'chunk', tool: 'dsds_get_chunk', identifier: chunk.identifier, name: chunk.name });
   return { content: [{ type: 'text', text: lines.join('\n') }] };
 }
 
@@ -157,12 +145,24 @@ function resolveStatus(metadata) {
   return typeof s === 'string' ? s : s.overall ?? s.value;
 }
 
-function resolveComponentLinks(metadata) {
-  if (!metadata) return [];
-  const links = Array.isArray(metadata) ? [] : (metadata.links ?? []);
-  return links.filter(l =>
-    l.identifier && ['component', 'pattern', 'foundation', 'token', 'token-group'].includes(l.kind)
-  );
+// DSDS 0.12.0: relationships are typed edges on entity.relationships.
+// Falls back to the deprecated metadata.links (internal-artifact kinds) so
+// un-migrated documents still render a Relationships section.
+function resolveRelationships(entity) {
+  if (Array.isArray(entity.relationships) && entity.relationships.length > 0) {
+    return entity.relationships;
+  }
+  const meta = entity.metadata;
+  const links = (meta && !Array.isArray(meta) ? meta.links : null) ?? [];
+  const ARTIFACT_KINDS = ['component', 'pattern', 'foundation', 'token', 'token-group', 'chunk', 'required'];
+  return links
+    .filter(l => l.identifier && ARTIFACT_KINDS.includes(l.kind))
+    .map(l => ({
+      relation: l.kind === 'chunk' ? 'alternative-to' : 'composes',
+      target: l.identifier,
+      role: l.role,
+      required: l.kind === 'required',
+    }));
 }
 
 function formatLevel(level) {

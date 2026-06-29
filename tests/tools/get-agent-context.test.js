@@ -13,7 +13,7 @@ describe('getAgentContextHandler', () => {
     const result = await getAgentContextHandler({ identifier: 'button' }, () => systems);
     const text = result.content[0].text;
     expect(text).toContain('Agent Context');
-    expect(text).toContain('Agent-only documentation');
+    expect(text).toContain('Agent-optimized context');
     expect(text).toContain('Rules');
     expect(result.isError).toBeFalsy();
   });
@@ -31,6 +31,15 @@ describe('getAgentContextHandler', () => {
     expect(result.content[0].text).toContain('no agent context defined');
     expect(result.content[0].text).toContain('agentDocumentBlocks');
     expect(result.isError).toBeFalsy();
+  });
+
+  it('compact (default) is smaller than verbose and omits the full doc dump', async () => {
+    const { systems } = await loadSystems([`${fixturesDir}/button.dsds.json`]);
+    const compact = (await getAgentContextHandler({ identifier: 'button' }, () => systems)).content[0].text;
+    const verbose = (await getAgentContextHandler({ identifier: 'button', verbose: true }, () => systems)).content[0].text;
+    expect(compact.length).toBeLessThan(verbose.length);
+    expect(verbose).toContain('Full component documentation');
+    expect(compact).not.toContain('Full component documentation');
   });
 
   it('returns isError for an unknown entity', async () => {

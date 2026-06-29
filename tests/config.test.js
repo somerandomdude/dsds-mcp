@@ -6,9 +6,28 @@ describe('loadConfig', () => {
   const orig = { ...process.env };
 
   afterEach(() => {
-    for (const key of ['DSDS_PATHS', 'DSDS_SCHEMA_VERSION', 'LINT_PLUGINS', 'LINT_RESOLVE_DIR']) {
+    for (const key of ['DSDS_PATHS', 'DSDS_SCHEMA_VERSION', 'LINT_PLUGINS', 'LINT_RESOLVE_DIR', 'DSDS_ENABLE_FEEDBACK']) {
       if (orig[key] === undefined) delete process.env[key];
       else process.env[key] = orig[key];
+    }
+  });
+
+  it('enables feedback by default', () => {
+    delete process.env['DSDS_ENABLE_FEEDBACK'];
+    expect(loadConfig().enableFeedback).toBe(true);
+  });
+
+  it('disables feedback for falsy DSDS_ENABLE_FEEDBACK values', () => {
+    for (const v of ['false', '0', 'no', 'off', 'OFF', 'False']) {
+      process.env['DSDS_ENABLE_FEEDBACK'] = v;
+      expect(loadConfig().enableFeedback, `value ${v}`).toBe(false);
+    }
+  });
+
+  it('keeps feedback enabled for truthy DSDS_ENABLE_FEEDBACK values', () => {
+    for (const v of ['true', '1', 'yes', 'on']) {
+      process.env['DSDS_ENABLE_FEEDBACK'] = v;
+      expect(loadConfig().enableFeedback, `value ${v}`).toBe(true);
     }
   });
 
@@ -36,10 +55,10 @@ describe('loadConfig', () => {
     expect(config.paths).toEqual(['/a/b.json', '/c/d.json']);
   });
 
-  it('defaults schemaVersion to 0.10.0', () => {
+  it('defaults schemaVersion to the bundled spec version', () => {
     delete process.env['DSDS_SCHEMA_VERSION'];
     const config = loadConfig();
-    expect(config.schemaVersion).toBe('0.10.0');
+    expect(config.schemaVersion).toBe('0.12.0');
   });
 
   it('uses DSDS_SCHEMA_VERSION when set', () => {

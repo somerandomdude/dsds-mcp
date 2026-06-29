@@ -72,8 +72,12 @@ async function getLogFiles() {
 // ─── Parsing ──────────────────────────────────────────────────────────────────
 
 function classify(entry) {
+  // Prefer the explicit discriminator; fall back to shape inference for log
+  // files written before entries carried a `type` field.
+  if (entry.type === 'tool' || entry.type === 'chunk' || entry.type === 'lint') return entry.type;
   if (entry.tool === 'dsds_get_chunk') return 'chunk';
   if (typeof entry.filesLinted === 'number') return 'lint';
+  if (entry.tool) return 'tool';
   return null;
 }
 
@@ -150,6 +154,16 @@ function printChunkEntry(entry) {
   console.log(`  ${c.dim(time)}  ${c.magenta(pad(entry.identifier, 30))}  ${entry.name}`);
 }
 
+function printToolEntry(entry) {
+  const time = formatTime(entry.timestamp);
+  const status = entry.ok === false ? c.red('✗') : c.green('✓');
+  const dur = typeof entry.durationMs === 'number' ? c.dim(` ${entry.durationMs}ms`) : '';
+  console.log(`  ${c.dim(time)}  ${status} ${c.cyan(pad(entry.tool, 28))}${dur}`);
+  if (entry.ok === false && entry.error) {
+    console.log(`             ${c.red(entry.error.split('\n')[0])}`);
+  }
+}
+
 // ─── Summary totals ───────────────────────────────────────────────────────────
 
 function printSummary(entries) {
@@ -204,6 +218,35 @@ function printSummary(entries) {
       console.log(`    ${c.magenta(pad(id, 30))}  ×${count}  ${c.dim(name)}`);
     }
   }
+
+  const toolEntries = entries.filter(e => e.type === 'tool');
+  if ((opts.type === 'all' || opts.type === 'tool') && toolEntries.length) {
+    const totalCalls = toolEntries.length;
+    const errors = toolEntries.filter(e => e.entry.ok === false).length;
+    const counts = {};
+    for (const { entry } of toolEntries) {
+      if (!counts[entry.tool]) counts[entry.tool] = { count: 0, errors: 0, reasons: {} };
+      counts[entry.tool].count++;
+      if (entry.ok === false) {
+        counts[entry.tool].errors++;
+        const reason = (entry.error || 'unknown error').split('\n')[0];
+        counts[entry.tool].reasons[reason] = (counts[entry.tool].reasons[reason] || 0) + 1;
+      }
+    }
+    const ranked = Object.entries(counts).sort((a, b) => b[1].count - a[1].count);
+
+    console.log(`\n${c.bold('── Tool usage ────────────────────────────────────────')}`);
+    console.log(`  Total calls: ${totalCalls}`);
+    console.log(`  Errors:      ${errors === 0 ? c.green('0') : c.red(String(errors))}`);
+    console.log(`  By tool:`);
+    for (const [tool, { count, errors: errs, reasons }] of ranked) {
+      const errTag = errs > 0 ? c.red(`  (${errs} err)`) : '';
+      console.log(`    ${c.cyan(pad(tool, 28))}  ×${count}${errTag}`);
+      for (const [reason, n] of Object.entries(reasons).sort((a, b) => b[1] - a[1])) {
+        console.log(`      ${c.red('↳')} ${c.dim(`×${n}`)} ${reason}`);
+      }
+    }
+  }
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -226,14 +269,19 @@ async function main() {
   }
 
   if (!opts.summary) {
+    // In the combined "all" view, skip per-call tool lines — they'd duplicate the
+    // chunk/lint detail and bury it. Tool calls still appear under `--type tool`
+    // and always feed the Tool usage summary below.
+    const detail = filtered.filter(e => e.type !== 'tool' || opts.type === 'tool');
     let currentDay = null;
-    for (const { date, type, entry } of filtered) {
+    for (const { date, type, entry } of detail) {
       if (date !== currentDay) {
         printDayHeader(date);
         currentDay = date;
       }
       if (type === 'lint')  printLintEntry(entry);
       if (type === 'chunk') printChunkEntry(entry);
+      if (type === 'tool')  printToolEntry(entry);
     }
   }
 

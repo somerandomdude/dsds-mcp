@@ -1,5 +1,11 @@
 const asText = v => (typeof v === 'string' ? v : (v?.value ?? ''));
 
+// Escape a value for use inside a Markdown table cell. In GFM, an unescaped `|`
+// is a column separator even inside an inline-code span, so union types like
+// `'a' | 'b'` would break the table. Pipes are backslash-escaped and newlines
+// collapse to spaces (a literal newline ends the row).
+const cell = v => String(v ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+
 // ── Block renderers ───────────────────────────────────────────────────────────
 
 function renderImports(block, lines) {
@@ -35,11 +41,11 @@ function renderApi(block, lines) {
   lines.push('| :---- | :---- | :---- | :---- | :---- |');
 
   for (const prop of props) {
-    const type = prop.type ? `\`${prop.type}\`` : '—';
-    const def = prop.default != null ? `\`${prop.default}\`` : '—';
+    const type = prop.type ? `\`${cell(prop.type)}\`` : '—';
+    const def = prop.default != null ? `\`${cell(prop.default)}\`` : '—';
     const req = prop.required ? 'Yes' : 'No';
-    const desc = asText(prop.description ?? '');
-    lines.push(`| \`${prop.identifier}\` | ${desc} | ${type} | ${def} | ${req} |`);
+    const desc = cell(asText(prop.description ?? ''));
+    lines.push(`| \`${cell(prop.identifier)}\` | ${desc} | ${type} | ${def} | ${req} |`);
   }
   lines.push('');
 }
@@ -60,8 +66,8 @@ function renderVariants(block, lines) {
         lines.push('| Value | Description |');
         lines.push('| :---- | :---- |');
         for (const v of values) {
-          const desc = asText(v.description ?? '');
-          lines.push(`| \`${v.identifier}\` | ${desc} |`);
+          const desc = cell(asText(v.description ?? ''));
+          lines.push(`| \`${cell(v.identifier)}\` | ${desc} |`);
         }
         lines.push('');
       }
@@ -138,7 +144,7 @@ function renderAccessibility(block, lines) {
     lines.push('| Key | Action |');
     lines.push('| :---- | :---- |');
     for (const k of keyboard) {
-      lines.push(`| \`${k.key}\` | ${k.action} |`);
+      lines.push(`| \`${cell(k.key)}\` | ${cell(k.action)} |`);
     }
     lines.push('');
   }

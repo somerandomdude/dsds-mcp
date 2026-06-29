@@ -41,7 +41,7 @@ async function main() {
     summaries: summarizeEntities(systems),
   };
 
-  const getLintConfig = () => ({ plugins: config.lintPlugins, resolveDir: config.lintResolveDir });
+  const getLintConfig = () => ({ plugins: config.lintPlugins, resolveDir: config.lintResolveDir, sourceDir: config.lintSourceDir });
   const getExportPaths = () => config.packageExportPaths;
 
   if (config.packageExportPaths.size > 0) {
@@ -60,12 +60,30 @@ async function main() {
     getExportPaths,
     config.feedbackDir,
     config.logsDir,
+    config.enableFeedback,
+    config.introInline,
   );
 
   startWatching(config.paths, state);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  // Self-terminate when the parent (the MCP client) goes away.
+  //
+  // The chokidar watcher and the update-check timer keep our event loop alive
+  // indefinitely, so once the parent dies we would otherwise linger forever as
+  // an orphan reparented to launchd — exactly how dsds-mcp processes piled up
+  // (45+) on the test machine. The parent-side harness SIGTERMs its children on
+  // graceful exit / Ctrl-C, but a SIGKILL'd, crashed, or OOM-killed parent skips
+  // all of that, and macOS has no PR_SET_PDEATHSIG. The one signal we always get
+  // is stdin closing: when the parent dies, the OS tears down the stdin pipe and
+  // emits 'end'/'close'. The SDK's StdioServerTransport listens only for 'data'
+  // and 'error', so we watch for EOF ourselves and exit.
+  const exitOnParentLoss = () => process.exit(0);
+  process.stdin.on('end', exitOnParentLoss);
+  process.stdin.on('close', exitOnParentLoss);
+  transport.onclose = exitOnParentLoss;
 }
 
 main().catch(err => {

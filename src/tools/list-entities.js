@@ -51,10 +51,12 @@ export async function listEntitiesHandler(_args, getSystems, getSummaries) {
 
   for (const [kind, entities] of Object.entries(byKind)) {
     lines.push(`## ${capitalize(kind)}s (${entities.length})`, '');
-    lines.push('| Identifier | Name | Status | Summary |');
-    lines.push('|------------|------|--------|---------|');
+    // Name column dropped — it is almost always the identifier in title case
+    // (button → Button), so it doubled the table width for no information.
+    lines.push('| Identifier | Status | Summary |');
+    lines.push('|------------|--------|---------|');
     for (const e of entities) {
-      lines.push(`| \`${e.identifier}\` | ${e.name ?? '—'} | ${e.status ?? '—'} | ${truncate(e.summary ?? '', 80)} |`);
+      lines.push(`| \`${e.identifier}\` | ${e.status ?? '—'} | ${truncate(e.summary ?? '', 60)} |`);
     }
     lines.push('');
   }

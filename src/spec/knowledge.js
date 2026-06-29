@@ -1,4 +1,4 @@
-// Static spec knowledge derived from the DSDS 0.11.0 schema.
+// Static spec knowledge derived from the DSDS 0.12.0 schema.
 // Used by spec tools to describe entities and document blocks without parsing the full schema at runtime.
 
 export const ENTITY_KINDS = ['component', 'guide', 'pattern', 'foundation', 'theme', 'token', 'token-group', 'chunk'];
@@ -7,50 +7,50 @@ export const ENTITY_DESCRIPTIONS = {
   component: {
     summary: 'Reusable UI element (e.g. Button, Modal, Input).',
     required: ['kind', 'identifier', 'name'],
-    optionalTop: ['description', 'metadata', 'documentBlocks', 'agentDocumentBlocks', '$extensions'],
+    optionalTop: ['description', 'metadata', 'documentBlocks', 'agentDocumentBlocks', 'relationships', '$extensions'],
     notes: 'The workhorse entity. Use documentBlocks to document anatomy, API, variants, states, accessibility, etc. Use agentDocumentBlocks for agent-only guidance (same block kinds, never rendered for humans).',
   },
   guide: {
     summary: 'Long-form, reading-oriented documentation: getting-started guides, tutorials, conceptual overviews, migration guides, and contribution docs.',
     required: ['kind', 'identifier', 'name'],
-    optionalTop: ['description', 'metadata', 'documentBlocks', 'agentDocumentBlocks', '$extensions'],
+    optionalTop: ['description', 'metadata', 'documentBlocks', 'agentDocumentBlocks', 'relationships', '$extensions'],
     notes: 'Use sections and steps blocks for narrative and procedural content. Guide category values: getting-started, tutorial, concept, migration, contribution.',
   },
   pattern: {
     summary: 'A multi-component solution for a recurring user need (e.g. Error Messaging, Empty State).',
     required: ['kind', 'identifier', 'name'],
-    optionalTop: ['description', 'metadata', 'documentBlocks', 'agentDocumentBlocks', '$extensions'],
+    optionalTop: ['description', 'metadata', 'documentBlocks', 'agentDocumentBlocks', 'relationships', '$extensions'],
     notes: 'Patterns describe composition and interaction flows across components, not individual component behavior.',
   },
   foundation: {
     summary: 'A macro-level visual domain such as color, typography, spacing, or motion.',
     required: ['kind', 'identifier', 'name'],
-    optionalTop: ['description', 'metadata', 'documentBlocks', 'agentDocumentBlocks', '$extensions'],
+    optionalTop: ['description', 'metadata', 'documentBlocks', 'agentDocumentBlocks', 'relationships', '$extensions'],
     notes: 'Use scale and principles blocks to document the rules and values that govern the foundation domain. Use sections blocks for free-form narrative prose — overviews, rationale, FAQs — that structured block kinds do not capture.',
   },
   theme: {
     summary: 'A named set of token overrides for a specific context (e.g. dark mode, high-contrast, brand variant).',
     required: ['kind', 'identifier', 'name'],
-    optionalTop: ['description', 'source', 'overrides', 'metadata', 'documentBlocks', 'agentDocumentBlocks', '$extensions'],
+    optionalTop: ['description', 'source', 'overrides', 'metadata', 'documentBlocks', 'agentDocumentBlocks', 'relationships', '$extensions'],
     notes: 'Themes layer on top of base tokens. Use overrides to map token identifiers to new values.',
   },
   token: {
     summary: 'An individual design value — color, spacing, typography, etc.',
     required: ['kind', 'identifier', 'tokenType'],
-    optionalTop: ['description', 'source', 'metadata', 'documentBlocks', 'agentDocumentBlocks', '$extensions'],
+    optionalTop: ['description', 'source', 'metadata', 'documentBlocks', 'agentDocumentBlocks', 'relationships', '$extensions'],
     notes: 'tokenType must be one of: color, dimension, fontFamily, fontWeight, fontStyle, duration, cubicBezier, number, string. DSDS documents the *why* of a token, not the value itself — use the W3C Design Tokens Format for values.',
   },
   'token-group': {
     summary: 'A hierarchical collection of related tokens (e.g. a color palette, a spacing scale).',
     required: ['kind', 'identifier'],
-    optionalTop: ['description', 'tokenType', 'source', 'children', 'metadata', 'documentBlocks', 'agentDocumentBlocks', '$extensions'],
+    optionalTop: ['description', 'tokenType', 'source', 'children', 'metadata', 'documentBlocks', 'agentDocumentBlocks', 'relationships', '$extensions'],
     notes: 'children is an array of token or token-group entities. tokenType can be set at the group level and inherited by children.',
   },
   chunk: {
     summary: 'A pre-composed block of code capturing a design system pattern — a copy-paste starting point built from the system\'s components.',
     required: ['kind', 'identifier', 'name', 'code'],
-    optionalTop: ['description', 'guidelines', 'useCases', 'metadata', '$extensions'],
-    notes: 'Chunks are intentionally simple: no documentBlocks. The `code` object has two forms: inline (`code` + `language`) or referenced (`src` + `language`, where `src` is a path relative to the chunk file). The `guidelines` and `useCases` arrays live directly on the entity (not inside documentBlocks). Use `metadata.links` to reference the components this chunk composes.',
+    optionalTop: ['description', 'guidelines', 'useCases', 'metadata', 'relationships', '$extensions'],
+    notes: 'Chunks are intentionally simple: no documentBlocks. The `code` object has two forms: inline (`code` + `language`) or referenced (`src` + `language`, where `src` is a path relative to the chunk file). The `guidelines` and `useCases` arrays live directly on the entity (not inside documentBlocks). Declare the components this chunk composes in the top-level `relationships` array, e.g. { relation: "composes", target: "button", required: true }.',
   },
 };
 
@@ -143,18 +143,28 @@ export const METADATA_FIELDS = {
   preview: 'Visual or interactive preview: a presentation object (image, video, code snippet, or URL).',
   thumbnail: '{ url, alt } — thumbnail image with required alt text.',
   extends: 'Inheritance declaration from a base entity in a parent system: { identifier, system?, modifications? }.',
-  links: 'Typed links to external resources or internal artifacts: { kind, url?, identifier?, label?, role?, required? }. External kinds: source, design, storybook, documentation, package, repository. Relationship kinds: alternative, parent, child, related. Artifact kinds: component, token, token-group, foundation, pattern, theme.',
+  links: 'DEPRECATED for entity relationships. `links` is for EXTERNAL resources only — { kind, url, label? } with kinds source, design, storybook, documentation, package, repository — and lives on anatomy/section entries, not on metadata. To relate one documented entity to another, use the top-level `relationships` array instead of a link.',
 };
+
+// `relationships` is a TOP-LEVEL entity field (beside identifier/name), not metadata.
+// DSDS 0.12.0 introduced it as the single, typed way to express edges between entities.
+export const RELATIONSHIPS_FIELD =
+  'relationships: an array of typed, directional edges to other documented entities. Each edge: ' +
+  '{ relation, target, role?, required?, versionConstraint? }. `relation` is one of depends-on (needs target to function), ' +
+  'composes (built from target), part-of (member of target), alternative-to (interchangeable; symmetric), replaces ' +
+  '(supersedes a deprecated target), extends (inherits from target); custom relations must be vendor-namespaced (e.g. acme.themes). ' +
+  '`target` must match a documented entity\'s identifier. `required` (default false) is meaningful for depends-on/composes. ' +
+  'Tools derive inverse edges (composed-by, dependency-of, contains, replaced-by) — do not author them.';
 
 // NOTE: `description` is NOT metadata — it is a top-level entity property beside `identifier` and `name`.
 
 // Minimal scaffolds per entity kind
-const SCHEMA_URL = 'https://designsystemdocspec.org/v0.11.0/dsds.bundled.schema.json';
+const SCHEMA_URL = 'https://designsystemdocspec.org/v0.12.0/dsds.bundled.schema.json';
 
 export const SCAFFOLDS = {
   component: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.11.0',
+    dsdsVersion: '0.12.0',
     entity: {
       kind: 'component',
       identifier: 'my-component',
@@ -166,7 +176,7 @@ export const SCAFFOLDS = {
   },
   guide: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.11.0',
+    dsdsVersion: '0.12.0',
     entity: {
       kind: 'guide',
       identifier: 'my-guide',
@@ -178,7 +188,7 @@ export const SCAFFOLDS = {
   },
   pattern: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.11.0',
+    dsdsVersion: '0.12.0',
     entity: {
       kind: 'pattern',
       identifier: 'my-pattern',
@@ -190,7 +200,7 @@ export const SCAFFOLDS = {
   },
   foundation: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.11.0',
+    dsdsVersion: '0.12.0',
     entity: {
       kind: 'foundation',
       identifier: 'my-foundation',
@@ -202,7 +212,7 @@ export const SCAFFOLDS = {
   },
   theme: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.11.0',
+    dsdsVersion: '0.12.0',
     entity: {
       kind: 'theme',
       identifier: 'my-theme',
@@ -215,7 +225,7 @@ export const SCAFFOLDS = {
   },
   token: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.11.0',
+    dsdsVersion: '0.12.0',
     entity: {
       kind: 'token',
       identifier: 'color-text-primary',
@@ -227,7 +237,7 @@ export const SCAFFOLDS = {
   },
   'token-group': {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.11.0',
+    dsdsVersion: '0.12.0',
     entity: {
       kind: 'token-group',
       identifier: 'color-text',
@@ -239,7 +249,7 @@ export const SCAFFOLDS = {
   },
   chunk: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.11.0',
+    dsdsVersion: '0.12.0',
     entity: {
       kind: 'chunk',
       identifier: 'my-chunk',
@@ -254,7 +264,7 @@ export const SCAFFOLDS = {
   },
   system: {
     $schema: SCHEMA_URL,
-    dsdsVersion: '0.11.0',
+    dsdsVersion: '0.12.0',
     systemInfo: {
       systemName: 'My Design System',
       systemVersion: '1.0.0',

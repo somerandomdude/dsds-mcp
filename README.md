@@ -2,13 +2,35 @@
 
 An MCP server for the [Design System Documentation Spec (DSDS)](https://designsystemdocspec.org). Exposes DSDS tooling to any MCP-compatible client (Claude Desktop, Cursor, etc.).
 
-Two use cases:
+Three use cases:
 - **Authoring** — help a team document their design system in DSDS format
-- **Consumption** — let agents query an existing DSDS document to build with the design system
+- **Building** — let agents query an existing DSDS document to build UI with the design system
+- **Answering** — let agents answer questions about how to use the design system, grounded in its authored documentation
 
 The DSDS spec is bundled at the version listed below. The server checks for updates on startup and surfaces a notice in tool responses when a newer version is available.
 
-**Bundled spec version:** 0.10.2
+**Bundled spec version:** 0.12.0
+
+---
+
+## Integrity guard
+
+`npm run check:integrity` verifies that every reference DSDS can return to an agent resolves:
+
+- every import from the configured icon package (`ICON_PACKAGE`) in chunk code is a real export (catches hallucinated icons),
+- no brief directs agents to an entity kind that returns nothing,
+- one spec version across `version.js`, the README, and the loaded DSDS files.
+
+Run it with the same env the server uses, so the icon and kind checks have data:
+
+```sh
+DSDS_PATHS=/path/to/your.dsds.json \
+ICON_PACKAGE=@your-org/icons \
+PACKAGE_EXPORT_PATHS=@your-org/icons=/path/to/@your-org/icons \
+npm run check:integrity
+```
+
+The icon check is opt-in: it runs only when `ICON_PACKAGE` is set and that package has a `PACKAGE_EXPORT_PATHS` entry. Without `DSDS_PATHS` it still runs the version check and skips the rest with a warning. Wire it into CI or a pre-commit hook to block a merge on a broken reference. The pure checks are covered by `tests/integrity.test.js` (run in `npm test`); the full guard also runs there when `DSDS_PATHS` is set.
 
 ---
 
@@ -67,7 +89,7 @@ Configuration is done via environment variables passed through your MCP client c
 | `DSDS_PATHS` | No | Comma-separated paths to your DSDS file(s). Required for design system access tools. |
 | `PACKAGE_EXPORT_PATHS` | No | Comma-separated `packageName=path` pairs pointing to each package root. Used by `dsds_check_exports` to verify components exist before importing. See below. |
 | `DSDS_INTRO_PATHS` | No | Comma-separated paths to DSDS files loaded as design system introductions. Content from each entity is prepended to the server instructions and exposed via the `dsds-intro` prompt. `DSDS_INTRO_PATH` (singular) still works as a single-path alias. |
-| `DSDS_SCHEMA_VERSION` | No | Override the spec version string. Defaults to `0.10.2`. |
+| `DSDS_SCHEMA_VERSION` | No | Override the spec version string. Defaults to `0.12.0`. |
 | `DSDS_FEEDBACK_DIR` | No | Directory where session feedback from `dsds_feedback` is written. Defaults to `feedback/` inside the dsds-mcp directory. |
 | `DSDS_LOGS_DIR` | No | Directory where `dsds_lint_code` writes per-session lint logs. Defaults to `logs/` inside the dsds-mcp directory. |
 | `LINT_PLUGINS` | No | Comma-separated ESLint plugin package names to use with `dsds_lint_code`. Plugins are resolved from `LINT_RESOLVE_DIR`. |
@@ -202,7 +224,7 @@ When fixes are applied, the tool returns the corrected code directly — copy it
       "args": ["dsds-mcp"],
       "env": {
         "DSDS_PATHS": "/path/to/my-design-system.dsds.json",
-        "PACKAGE_EXPORT_PATHS": "@sanity-labs/ui-poc=/path/to/ui-poc/packages/ui"
+        "PACKAGE_EXPORT_PATHS": "@your-org/ui=/path/to/your-ui/packages/ui"
       }
     }
   }
@@ -212,7 +234,7 @@ When fixes are applied, the tool returns the corrected code directly — copy it
 Multiple packages (comma-separated):
 
 ```json
-"PACKAGE_EXPORT_PATHS": "@sanity-labs/ui-poc=/path/to/ui-poc/packages/ui,@sanity/ui=/path/to/sanity-ui/packages/ui"
+"PACKAGE_EXPORT_PATHS": "@your-org/ui=/path/to/your-ui/packages/ui,@your-org/icons=/path/to/your-icons"
 ```
 
 Each path should point to the package root (the directory containing `package.json`). The tool reads `dist/index.d.ts` if present, or falls back to `src/index.ts`.
@@ -225,9 +247,9 @@ dsds_check_exports(components=["Box", "TextInput", "Badge"])
 
 Returns:
 ```
-✓ Box — exported from `@sanity-labs/ui-poc`
-✗ TextInput — not found in `@sanity-labs/ui-poc`
-✓ Badge — exported from `@sanity/ui`
+✓ Box — exported from `@your-org/ui`
+✗ TextInput — not found in `@your-org/ui`
+✓ Badge — exported from `@your-org/icons`
 ```
 
 ---
@@ -247,7 +269,7 @@ These help a team author DSDS-compliant documentation.
 
 | Tool | Description |
 |------|-------------|
-| `dsds_context_brief` | **Start here.** A structured briefing for the current use case — `"author"` (documenting a design system) or `"build"` (implementing UI with it). Call this before any other tool. |
+| `dsds_context_brief` | **Start here.** A structured briefing for the current use case — `"author"` (documenting a design system), `"build"` (implementing UI with it), or `"ask"` (answering a question about how to use it). Call this before any other tool. |
 | `dsds_spec_overview` | Overview of DSDS: entity types, structure, and authoring workflow |
 | `dsds_spec_entity_schema` | Full field definitions for a given entity kind (`component`, `token`, `theme`, etc.) |
 | `dsds_spec_document_blocks` | Document block types valid for an entity kind, with descriptions |
@@ -271,16 +293,15 @@ These let agents query an existing DSDS document.
 | `dsds_get_entity` | Full documentation for an entity by identifier or name. Returns all `documentBlocks` and `agentDocumentBlocks`. |
 | `dsds_get_document_block` | One specific block (e.g. `api`, `accessibility`) from an entity — faster than fetching the full entity |
 | `dsds_get_agent_context` | Agent-optimized view of an entity. Renders content from both `agentDocumentBlocks` and `documentBlocks` (guidelines, use cases, props, sections — minus verbose accessibility and import blocks). The primary tool for understanding how to use a component. |
-| `dsds_get_blueprint` | Fetch a blueprint entity by identifier. Returns the full code block (ready to copy), guidelines, use cases, and related component links. Use this instead of `dsds_get_entity` for blueprint entities. |
 
 **Query workflow:**
 ```
 dsds_context_brief(useCase="build") → dsds_list_entities → dsds_search_entities → dsds_get_agent_context or dsds_get_entity
 ```
 
-For layouts and shells, check blueprints first:
+**Answer workflow** (answering a question about using the design system):
 ```
-dsds_search_entities(kind="blueprint") → dsds_get_blueprint(identifier)
+dsds_context_brief(useCase="ask") → dsds_search_entities → dsds_get_agent_context → grounded, cited answer
 ```
 
 ### Lint tools — require `LINT_PLUGINS`
@@ -310,8 +331,8 @@ DSDS files are JSON documents. Every file needs `dsdsVersion` and either an `ent
 **Single entity:**
 ```json
 {
-  "$schema": "https://designsystemdocspec.org/v0.10.2/dsds.bundled.schema.json",
-  "dsdsVersion": "0.10.2",
+  "$schema": "https://designsystemdocspec.org/v0.12.0/dsds.bundled.schema.json",
+  "dsdsVersion": "0.12.0",
   "entity": {
     "kind": "component",
     "identifier": "button",
@@ -327,8 +348,8 @@ DSDS files are JSON documents. Every file needs `dsdsVersion` and either an `ent
 **Multi-entity:**
 ```json
 {
-  "$schema": "https://designsystemdocspec.org/v0.10.2/dsds.bundled.schema.json",
-  "dsdsVersion": "0.10.2",
+  "$schema": "https://designsystemdocspec.org/v0.12.0/dsds.bundled.schema.json",
+  "dsdsVersion": "0.12.0",
   "systemInfo": { "systemName": "My Design System" },
   "entityGroups": [
     { "$ref": "./components/button.dsds.json#/entity" },
@@ -355,6 +376,33 @@ npm test             # run tests once
 npm run test:watch   # watch mode
 npm run dev          # run the server directly (reads env vars from shell)
 npm run update-schema  # fetch the latest published DSDS schema from designsystemdocspec.org
+npm run logs         # view usage logs (lint + chunk activity) in a readable format
 ```
 
+The server records usage to `logs/YYYY-MM-DD.jsonl`:
+
+- **Every tool call** — `{ type: "tool", tool, ok, durationMs }`
+- **Chunk access** — `dsds_get_chunk` writes a detailed `{ type: "chunk", identifier, name }` entry
+- **Lint runs** — `dsds_lint_code` writes a detailed `{ type: "lint", … }` entry with per-file violations
+
+Read them back with `npm run logs`. Pass options after `--`:
+
+```bash
+npm run logs                      # last 7 days: lint + chunk detail, plus a tool-usage summary
+npm run logs -- --summary         # totals only, no per-entry detail
+npm run logs -- --type tool       # per-call tool log + tool-usage breakdown
+npm run logs -- --type lint       # only lint entries (or --type chunk)
+npm run logs -- --days 30         # last 30 days
+npm run logs -- --date 2026-06-18 # a single day
+```
+
+Tool calls always feed the **Tool usage** summary (counts and error totals per tool). They're omitted from the per-entry view in the combined `--type all` mode — where they'd duplicate the chunk/lint detail — but shown per call under `--type tool`.
+
 The spec schema is bundled at `src/spec/dsds.bundled.schema.json`. Run `npm run update-schema` to pull the latest published version automatically. It fetches the schema from `https://designsystemdocspec.org/v{version}/dsds.bundled.schema.json` and updates `BUNDLED_VERSION` in `src/spec/version.js`. The MCP server loads the schema once at startup via `require()`, so restart the server after updating.
+
+---
+
+## License
+
+Licensed under the [Apache License 2.0](./LICENSE). The bundled DSDS schema is also
+Apache-2.0; see [NOTICE](./NOTICE) for attribution.

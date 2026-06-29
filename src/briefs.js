@@ -7,6 +7,7 @@
 //
 // BUILD_BRIEF   — shown before implementing UI with the design system
 // AUTHOR_BRIEF  — shown before documenting a design system in DSDS format
+// ASK_BRIEF     — shown before answering a question about using the design system
 // PROMPT_META   — titles and descriptions shown in MCP client UIs
 // =============================================================================
 
@@ -66,15 +67,19 @@ Use the following lookup order — stop as soon as you have what you need:
    details, \`variants\` for the full option matrix, \`states\` for interaction behaviour).
    Faster and cheaper than fetching the whole entity.
 
-3. **\`dsds_get_entity(identifier)\`** — use only when you need the raw, complete entity
+3. **\`dsds_build_component(step:"start", identifier)\`** — ALWAYS USE when you're ready to
+add a component to code. This is the required way of adding components.
+
+4. **\`dsds_get_entity(identifier)\`** — use only when you need the raw, complete entity
    including all blocks in their original JSON structure. Prefer the two calls above.
 
 ---
 
 ### Step 5 — Use tokens, not hardcoded values
 
-Call \`dsds_search_entities\` with \`kind=token\` or \`kind=token-group\` to find
-the design tokens that apply to your work.
+Call \`dsds_search_entities\` with \`kind=token-group\` to find the design token
+scales that apply to your work (spacing, radius, typography, and the rest). Open
+a group with \`dsds_get_entity\` to see its individual tokens.
 
 Never hardcode color values, spacing, or type sizes. Always reference the
 token identifier from the design system.
@@ -89,7 +94,23 @@ If a chunk matches, call \`dsds_get_chunk(identifier)\` to retrieve the full cod
 
 ---
 
-Only after completing all six steps should you write code.
+Only after completing these steps should you write code.
+
+---
+
+### Step 7 — Validate and repair before you finish (required)
+
+Writing the code is not the end. Before you consider the work done, run an
+ordered, repeating check and fix what it finds — do not skip a stage and do not
+stop at the first green light:
+
+1. **Lint.** Call \`dsds_lint_code\` with every file you wrote (use the \`files\` array). Apply the corrected code it returns, then resolve any remaining violations it reports. Lint is not optional or advisory — design-system rules only fire on real JSX, so lint your final component code, not a stub.
+2. **Build / render.** Make sure the app actually mounts and renders without console or runtime errors. A file that type-checks but throws on render has not passed.
+3. **Accessibility.** Resolve accessibility issues (labels, landmarks, alt text, ARIA, and color contrast) so the rendered UI is usable by assistive technology.
+
+If a later stage forces a change, re-run from lint — a fix can reintroduce an
+earlier problem. Treat this loop as part of building the component, not a
+separate QA pass someone else will do.
 `.trim();
 
 
@@ -184,6 +205,75 @@ This step significantly improves agent behavior when building with the system.
 
 
 // -----------------------------------------------------------------------------
+// ASK BRIEF
+// Shown to agents before they answer a question about using the design system
+// ("how do I…", "which component for…", "what are the rules for…"). This is a
+// retrieval-and-answer loop, NOT a build loop: the goal is a correct, grounded,
+// cited answer — not generated code. Edit this to reflect the questions your
+// team is asked most and any house rules for how answers should be framed.
+// -----------------------------------------------------------------------------
+
+export const ASK_BRIEF = `
+## Before you answer: Design System Q&A Briefing
+
+You are answering a question about how to use this design system — not building
+UI and not authoring documentation. Your answer must come from the design
+system's own documentation, not from general knowledge or assumption.
+
+Follow this retrieval-and-answer loop.
+
+---
+
+### Step 1 — Locate the relevant entities
+
+Call \`dsds_search_entities\` to find the components, tokens, patterns, or guides
+the question is about. Filter by \`kind\`, \`status\`, \`tags\`, or a keyword \`query\`.
+
+Search is keyword-based, so the user's wording may not match the system's
+vocabulary. If the first query returns nothing useful, try synonyms and the
+underlying concept (e.g. a question about "spacing between items" maps to layout
+components and the spacing \`token-group\`). If you still find nothing, say the
+topic does not appear to be documented rather than guessing.
+
+---
+
+### Step 2 — Read the authored guidance
+
+For each relevant entity, use this lookup order — stop as soon as you can answer:
+
+1. **\`dsds_get_agent_context(identifier)\`** — start here. Returns the rules,
+   anti-patterns, prop table, and use-case disambiguation. This answers most
+   "how do I" and "what are the rules for" questions directly.
+2. **\`dsds_get_document_block(identifier, blockType)\`** — for one specific
+   section (e.g. \`accessibility\`, \`variants\`, \`useCases\`) when the agent context
+   did not cover it.
+3. **\`dsds_get_entity(identifier)\`** — only when you need the complete raw entity.
+
+For "which should I use" questions, also check relationships and
+\`dsds_get_alternatives(identifier)\` to recommend the right entity and name what
+it replaces or is preferred over.
+
+---
+
+### Step 3 — Answer, grounded and cited
+
+- Answer **only** from what the documentation says. If the docs are silent on
+  part of the question, say so explicitly — do not fill the gap with assumption.
+- **Cite the entity identifiers** you drew from (e.g. \`Use \\\`Stack\\\` (see
+  \`stack\`)\`) so the answer is traceable.
+- Respect lifecycle status: never recommend a **deprecated** entity without
+  naming its replacement; flag **experimental** or **draft** entities as such.
+- Prefer documented **patterns** and **chunks** over assembling primitives from
+  scratch — if a pattern answers the question, point to it.
+- If the user is clearly about to build, you may hand off: tell them to run
+  \`dsds_context_brief(useCase="build")\` before writing code.
+
+Keep the answer concise and specific to what was asked. A short, correct, cited
+answer beats an exhaustive one.
+`.trim();
+
+
+// -----------------------------------------------------------------------------
 // PROMPT_META
 // Controls how prompts appear in MCP client UIs (Claude Desktop, Cursor, etc.)
 // Edit the description and taskArgDescription to change what users see.
@@ -200,5 +290,10 @@ export const PROMPT_META = {
     name: 'author-dsds-docs',
     description: 'Get a step-by-step briefing before documenting a design system in DSDS format. Covers entity types, required fields, and authoring workflow.',
     taskArgDescription: 'What are you documenting? (e.g. "a Button component", "our color token system", "the error messaging pattern")',
+  },
+  ask: {
+    name: 'ask-design-system',
+    description: 'Get a briefing before answering a question about how to use this design system. Covers how to find the right entities, read their authored guidance, and answer with grounded, cited information.',
+    taskArgDescription: 'What is the question? (e.g. "how do I lay out a form?", "which component for a confirmation dialog?", "what are the spacing rules?")',
   },
 };
