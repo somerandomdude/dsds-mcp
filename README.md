@@ -13,6 +13,105 @@ The DSDS spec is bundled at the version listed below. The server checks for upda
 
 ---
 
+## Quick start (no coding required)
+
+This gets the design-system tools running inside your AI assistant (Claude Desktop, Cursor, or Claude Code). You won't write any code — you'll copy a small block of text into a settings file.
+
+**What you need:**
+
+- An AI app that supports MCP — **Claude Desktop**, **Cursor**, or **Claude Code**.
+- A **DSDS file** for your design system: one `.dsds.json` file that documents your components, tokens, and guidelines. Don't have one yet? See [I don't have a DSDS file yet](#i-dont-have-a-dsds-file-yet) below — you can use this tool to create one.
+
+### Step 1 — Install Node.js
+
+The server runs on Node.js, a free program that lets your computer run tools like this one.
+
+1. Go to **[nodejs.org](https://nodejs.org)** and download the version labeled **"LTS"**.
+2. Open the downloaded installer and click through with the default options.
+
+You only do this once.
+
+### Step 2 — Copy your DSDS file's location
+
+You need the full location ("path") of your `.dsds.json` file:
+
+- **macOS:** find the file in Finder, right-click it, hold the **Option** key, then choose **"Copy … as Pathname"**.
+- **Windows:** find the file, hold **Shift**, right-click it, then choose **"Copy as path"**.
+
+It will look something like `/Users/you/design-system/my-system.dsds.json`. You'll paste it in Step 4.
+
+### Step 3 — Open your AI app's settings file
+
+Open the configuration for the app you use:
+
+- **Claude Desktop:** Settings → Developer → **Edit Config**.
+- **Cursor:** open (or create) a file named `.cursor/mcp.json` in your project folder.
+- **Claude Code:** run `claude mcp add` in a terminal, or open `~/.claude.json`.
+
+If the file is empty, that's fine — you'll paste the whole block in the next step.
+
+### Step 4 — Add the design-system server
+
+Copy this block into the file. (If the file already has an `"mcpServers"` section, add just the `"dsds"` part inside it.)
+
+```json
+{
+  "mcpServers": {
+    "dsds": {
+      "command": "npx",
+      "args": ["dsds-mcp"],
+      "env": {
+        "DSDS_PATHS": "PASTE_YOUR_FILE_PATH_HERE"
+      }
+    }
+  }
+}
+```
+
+Replace `PASTE_YOUR_FILE_PATH_HERE` with the path you copied in Step 2 — keep the quotation marks around it. **Save the file.**
+
+> 💡 **You don't need to install anything else.** The `npx` in the config downloads the server automatically the first time your app runs it, then reuses it afterward. The only thing you installed was Node.js in Step 1 — there's no `npm install` step.
+
+### Step 5 — Restart your AI app
+
+Fully quit the app and open it again so it loads the change. The first time it runs, it downloads the server on its own (this can take a few seconds — no extra steps).
+
+### Step 6 — Check it worked
+
+Ask your assistant:
+
+> "Use the dsds tools to list the components in my design system."
+
+If it lists your components, you're set. (In Claude Desktop you'll also see the tools under the tools/plug icon in the message box.)
+
+### I don't have a DSDS file yet
+
+You can use this tool to create one. Follow Steps 1, 3, and 5, but in Step 4 paste this shorter block (no file path needed):
+
+```json
+{
+  "mcpServers": {
+    "dsds": {
+      "command": "npx",
+      "args": ["dsds-mcp"]
+    }
+  }
+}
+```
+
+Then ask your assistant: *"Help me document my design system in DSDS format."* It will walk you through it step by step. Once you've saved a `.dsds.json` file, go back to Step 4, add the `"env"` block with your file's path, and restart.
+
+### Prefer to install it instead?
+
+`npx` needs no maintenance and is the easiest option, but you can install the server if you'd rather:
+
+- **Pin a version** so it never changes unexpectedly — set `"args": ["dsds-mcp@0.1.0"]` in your config.
+- **Install it globally** and skip `npx` — run `npm install -g dsds-mcp` in a terminal, then use `"command": "dsds-mcp"` with no `"args"`.
+
+> **Power users:** the [Configuration](#configuration) section below covers every option (multiple files, linting, export checks, icon validation) and where each client stores its config.
+
+---
+
 ## Integrity guard
 
 `npm run check:integrity` verifies that every reference DSDS can return to an agent resolves:

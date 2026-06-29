@@ -6,6 +6,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-29
+
+### Changed
+- Docs: added a step-by-step "Quick start (no coding required)" guide for non-technical users (install Node.js → copy DSDS file path → edit client config → restart → verify), plus an "I don't have a DSDS file yet" path.
+- Docs: clarified that no separate install step is needed — `npx` fetches the server automatically — with optional version-pinning (`dsds-mcp@0.1.1`) and global-install instructions for those who prefer them.
+
+### Fixed
+- Mark the `dsds-mcp` bin as executable.
+
 ## [0.1.0] - 2026-06-28
 
 Initial public release.
