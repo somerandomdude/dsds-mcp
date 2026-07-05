@@ -1,4 +1,5 @@
 import { getUpdateNotice } from '../spec/version.js';
+import { resolvePropValues, isBooleanProp } from '../prop-types.js';
 
 /**
  * dsds_build_component — a stateless, step-by-step wizard that walks an agent
@@ -38,8 +39,9 @@ export const buildComponentDef = {
     'use its output instead of hand-writing JSX or guessing props. Two calls: step:"start" with an "identifier" ' +
     'returns the full list of props and each prop\'s allowed values; step:"finalize" with that identifier and an ' +
     '"answers" map { propId: value } returns ready-to-use JSX in "result.code", guaranteed valid (result.lintSafe ' +
-    '= true — do not lint it). The start response explains the exact fields. Reads existing components; does NOT ' +
-    'author documentation (use dsds_author_component_doc for that). Requires DSDS_PATHS.',
+    '= true — do not lint it). The start response explains the exact fields. Returns reference JSX for you to adapt; ' +
+    'does NOT emit, save, or create files in any project — you copy the code into your own files. Reads existing ' +
+    'components; does NOT author documentation (use dsds_author_component_doc for that). Requires DSDS_PATHS.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -125,30 +127,6 @@ function availableComponents(getSystems) {
 
 // ── Type parsing ──────────────────────────────────────────────────────────────
 
-/**
- * Parse a string-literal union type into its values, e.g. "'button' | 'a'" →
- * ['button', 'a']. Returns null if any member is not a pure string literal
- * (so mixed types like `string | number` fall through to free input).
- */
-function parseStringUnion(type) {
-  if (typeof type !== 'string' || !type.includes("'") && !type.includes('"')) return null;
-  const parts = type.split('|').map(s => s.trim()).filter(Boolean);
-  if (parts.length === 0) return null;
-  const values = [];
-  for (const part of parts) {
-    const m = part.match(/^'([^']*)'$/) || part.match(/^"([^"]*)"$/);
-    if (!m) return null;
-    values.push(m[1]);
-  }
-  return values.length ? values : null;
-}
-
-function isBooleanType(type) {
-  if (typeof type !== 'string') return false;
-  const t = type.replace(/\s|\|undefined/g, '');
-  return t === 'boolean' || t === 'Responsive<boolean>';
-}
-
 // ── Question model ──────────────────────────────────────────────────────────
 
 /**
@@ -188,10 +166,12 @@ function buildQuestions(entity) {
       questions.push({ ...common, kind: 'children' });
       continue;
     }
-    const union = parseStringUnion(prop.type);
+    // Spec-authority order: schema.enum → values → type-string parse. Systems
+    // that document enums via `values` (no TS-style type string) get options too.
+    const union = resolvePropValues(prop);
     if (union) {
-      questions.push({ ...common, kind: 'enum', options: union.map(v => ({ value: v })) });
-    } else if (isBooleanType(prop.type)) {
+      questions.push({ ...common, kind: 'enum', options: union.map(m => ({ value: m.value, isNumber: m.isNumber })) });
+    } else if (isBooleanProp(prop)) {
       questions.push({ ...common, kind: 'flag' });
     } else {
       questions.push({ ...common, kind: 'free' });
@@ -252,25 +232,35 @@ function pascalCase(id) {
   return String(id).replace(/(^|[-_\s]+)([a-z0-9])/g, (_, __, ch) => ch.toUpperCase());
 }
 
+const NUMERIC_RE = /^-?\d+(?:\.\d+)?$/;
+
 function renderAttr(id, choice) {
   const { kind, value, typeHint } = choice;
   if (kind === 'flag') {
     return value === true ? id : `${id}={false}`;
   }
   if (kind === 'enum') {
-    return `${id}="${value}"`;
+    // A numeric union member is a JS number, not a string — emit `{3}`, never
+    // `"3"`. (Design systems don't use numeric string-literal unions like '3'.)
+    return NUMERIC_RE.test(String(value)) ? `${id}={${value}}` : `${id}="${value}"`;
   }
-  // free input — decide string literal vs JSX expression
+  // free input — decide string literal vs JSX expression.
   if (typeof value === 'number' || typeof value === 'boolean') return `${id}={${value}}`;
   if (typeof value === 'object' && value !== null) return `${id}={${JSON.stringify(value)}}`;
   const str = String(value).trim();
+  // A numeric value is a number prop given as a string (e.g. an unparsed scale)
+  // → expression, never a quoted string. Fixes `contentSize="3"` → `{3}`.
+  if (NUMERIC_RE.test(str)) return `${id}={${str}}`;
+  // The agent already wrote an expression, JSX, or array/object literal.
+  if (str.startsWith('{')) return `${id}={${str.replace(/^\{([\s\S]*)\}$/, '$1')}}`; // unwrap added braces
+  if (str.startsWith('<') || str.startsWith('[')) return `${id}={${str}}`;
+  // "Hard" expression-typed props take a bare identifier as an expression
+  // (e.g. icon={AddIcon}, as={Box}). ReactNode/element-content types are
+  // deliberately NOT here: a plain-text value for them is a string and must be
+  // quoted — fixes `label={Enable email digests}` → `label="Enable email digests"`.
   const hint = (typeHint ?? '').toLowerCase();
-  const exprHint = /node|element|reactnode|elementtype|function|=>|\bobject\b|responsive|number|boolean|\[\]|<|\bref\b/.test(hint);
-  const looksExpr = str.startsWith('{') || str.startsWith('<') || exprHint;
-  if (looksExpr) {
-    const inner = str.replace(/^\{([\s\S]*)\}$/, '$1'); // unwrap braces the agent may have added
-    return `${id}={${inner}}`;
-  }
+  const exprType = /elementtype|componenttype|exoticcomponent|=>|\bfunction\b|\bref\b|\bobject\b|\[\]/.test(hint);
+  if (exprType) return `${id}={${str}}`;
   return `${id}="${str}"`;
 }
 
@@ -496,7 +486,7 @@ function handleFinalize({ identifier, data, answers }, getSystems) {
     nextStep:
       `Use the snippet in "result.code" as-is. It uses only documented props and valid option values for ` +
       `${entity.name ?? entity.identifier}, so it is design-system-valid by construction — do NOT run it through ` +
-      `dsds_lint_code (that would only re-emit code you already have).${notice ? ' ' + notice : ''}`,
+      `the lint tools (that would only re-emit code you already have).${notice ? ' ' + notice : ''}`,
     nextStepId: 'finalize',
     data,
     result: {

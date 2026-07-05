@@ -1,4 +1,4 @@
-export const BUNDLED_VERSION = '0.12.0';
+export const BUNDLED_VERSION = '0.13.0';
 export const SPEC_URL = 'https://designsystemdocspec.org';
 
 const GITHUB_TAGS_URL =

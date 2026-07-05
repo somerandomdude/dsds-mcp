@@ -74,6 +74,137 @@ export function checkKindReferences(text, kindsWithEntities) {
   return errors;
 }
 
+// ── R4: example code uses only real props ────────────────────────────────────
+//
+// Docs drift: an example shows `<Tooltip content="…">` while the shipped prop is
+// `text`. The MCP then actively teaches a build error. This check extracts JSX
+// from every example block and validates each prop used on a *documented*
+// component against that component's api-block prop list.
+
+// Props valid on any component: React/DOM globals, event handlers, aria/data
+// attributes, and the shared ui-poc prop families (margin, padding, layout,
+// tone…) that api blocks do not re-list per component.
+const SHARED_PROP_RE = new RegExp(
+  '^(' +
+  [
+    // react/dom globals
+    'key', 'ref', 'id', 'className', 'style', 'role', 'tabIndex', 'title', 'hidden',
+    'htmlFor', 'href', 'target', 'rel', 'type', 'disabled', 'src', 'alt', 'placeholder',
+    'value', 'defaultValue', 'checked', 'defaultChecked', 'name', 'autoFocus', 'draggable',
+    'rows', 'cols', 'min', 'max', 'step', 'maxLength', 'lang', 'dir',
+    // shared ui-poc families (LayoutProps/MarginProps/ToneProps/TypographyProps)
+    'as', 'tone', 'scheme', 'density', 'radius', 'shadow', 'display',
+    'margin', 'marginX', 'marginY', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+    'padding', 'paddingX', 'paddingY', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'gap', 'columnGap', 'rowGap',
+    'width', 'minWidth', 'maxWidth', 'height', 'minHeight', 'maxHeight',
+    'flexGrow', 'flexShrink', 'flexBasis', 'flexDirection', 'flexWrap',
+    'alignItems', 'alignSelf', 'justifyContent',
+    'gridTemplateColumns', 'gridTemplateRows', 'gridAutoColumns', 'gridAutoRows', 'gridAutoFlow',
+    'gridColumn', 'gridRow', 'gridColumnStart', 'gridColumnEnd', 'gridRowStart', 'gridRowEnd',
+    'overflow', 'overflowX', 'overflowY', 'position', 'top', 'right', 'bottom', 'left', 'inset', 'zIndex',
+    'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft',
+    'size', 'muted', 'weight', 'align', 'lineClamp',
+  ].join('|') +
+  ')$|^(on[A-Z]|aria-|data-)',
+);
+
+/** Collect every example code string from an entity's document blocks. */
+export function extractExampleCode(entity) {
+  const out = [];
+  const visit = (node) => {
+    if (node == null) return;
+    if (Array.isArray(node)) { node.forEach(visit); return; }
+    if (typeof node !== 'object') return;
+    if (node.presentation?.kind === 'code' && typeof node.presentation.code === 'string') {
+      out.push(node.presentation.code);
+    }
+    for (const key of ['body', 'instruction', 'guidance']) {
+      const text = node[key];
+      if (typeof text !== 'string') continue;
+      for (const m of text.matchAll(/```[a-z]*\n([\s\S]*?)```/g)) out.push(m[1]);
+    }
+    for (const v of Object.values(node)) visit(v);
+  };
+  visit(entity?.documentBlocks);
+  visit(entity?.agentDocumentBlocks);
+  return out;
+}
+
+/**
+ * Extract [{component, prop}] pairs from JSX opening tags in a code string.
+ *
+ * Docs teach right-vs-wrong in paired examples: a line marked ✗ (or a comment
+ * saying wrong/invalid) shows the API mistake on purpose. Tags that appear
+ * while the nearest preceding marker is a "wrong" marker are skipped — only
+ * code presented as correct is validated.
+ */
+export function extractJsxProps(code) {
+  const src = code ?? '';
+  // Per-line marker state: true = inside an intentional wrong-example region.
+  const lines = src.split('\n');
+  const wrongAt = [];
+  let wrong = false;
+  for (const line of lines) {
+    if (/✗|✘|⛔|\/\/.*\b(wrong|invalid|not valid|don'?t)\b|\{\/\*.*\b(wrong|invalid|not valid|don'?t)\b/i.test(line)) wrong = true;
+    else if (/✓|✔|\/\/.*\b(correct|right|instead|fix)\b|\{\/\*.*\b(correct|right|instead|fix)\b/i.test(line)) wrong = false;
+    wrongAt.push(wrong);
+  }
+  const lineOfIndex = (idx) => src.slice(0, idx).split('\n').length - 1;
+
+  const pairs = [];
+  const tagRe = /<([A-Z][A-Za-z0-9.]*)((?:[^>"'{}]|"[^"]*"|'[^']*'|\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})*?)\/?>/g;
+  let m;
+  while ((m = tagRe.exec(src)) !== null) {
+    if (wrongAt[lineOfIndex(m.index)]) continue; // intentional wrong example
+    const component = m[1];
+    // Strip expression containers and quoted strings so their contents can't
+    // masquerade as attribute names, then strip spreads.
+    const attrs = m[2]
+      .replace(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, ' ')
+      .replace(/"[^"]*"|'[^']*'/g, ' ')
+      .replace(/\.\.\./g, ' ');
+    for (const a of attrs.matchAll(/(?:^|\s)([A-Za-z][A-Za-z0-9-]*)\s*(?==|\s|$)/g)) {
+      pairs.push({ component, prop: a[1] });
+    }
+  }
+  return pairs;
+}
+
+/**
+ * Validate example JSX props against each documented component's api block.
+ * `entities` = all loaded entities. Only components documented with an api
+ * block are checked; unknown/local components are skipped.
+ */
+export function checkExampleProps(entities) {
+  const errors = [];
+  // component display name -> { identifier, props }
+  const byName = new Map();
+  for (const e of entities ?? []) {
+    if (e.kind !== 'component') continue;
+    const api = [...(e.documentBlocks ?? []), ...(e.agentDocumentBlocks ?? [])]
+      .find((b) => b?.kind === 'api');
+    if (!api?.properties?.length) continue;
+    const props = new Set(api.properties.map((p) => p.identifier).filter(Boolean));
+    if (e.name) byName.set(e.name, { identifier: e.identifier, props });
+  }
+
+  for (const e of entities ?? []) {
+    for (const code of extractExampleCode(e)) {
+      for (const { component, prop } of extractJsxProps(code)) {
+        const target = byName.get(component);
+        if (!target) continue; // native tag, local component, or undocumented
+        if (target.props.has(prop) || SHARED_PROP_RE.test(prop)) continue;
+        errors.push(
+          `Example in "${e.identifier}" uses <${component} ${prop}=…>, but "${prop}" is not a prop of ` +
+          `${component} ("${target.identifier}" api block lists: ${[...target.props].join(', ')}).`,
+        );
+      }
+    }
+  }
+  return [...new Set(errors)];
+}
+
 /** Flag any version source that does not match the bundled spec version. */
 export function checkVersions(bundled, sources) {
   const errors = [];

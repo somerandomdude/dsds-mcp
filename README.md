@@ -9,7 +9,7 @@ Three use cases:
 
 The DSDS spec is bundled at the version listed below. The server checks for updates on startup and surfaces a notice in tool responses when a newer version is available.
 
-**Bundled spec version:** 0.12.0
+**Bundled spec version:** 0.13.0
 
 ---
 
@@ -105,7 +105,7 @@ Then ask your assistant: *"Help me document my design system in DSDS format."* I
 
 `npx` needs no maintenance and is the easiest option, but you can install the server if you'd rather:
 
-- **Pin a version** so it never changes unexpectedly — set `"args": ["dsds-mcp@0.1.0"]` in your config.
+- **Pin a version** so it never changes unexpectedly — set `"args": ["dsds-mcp@0.2.0"]` in your config.
 - **Install it globally** and skip `npx` — run `npm install -g dsds-mcp` in a terminal, then use `"command": "dsds-mcp"` with no `"args"`.
 
 > **Power users:** the [Configuration](#configuration) section below covers every option (multiple files, linting, export checks, icon validation) and where each client stores its config.
@@ -118,6 +118,7 @@ Then ask your assistant: *"Help me document my design system in DSDS format."* I
 
 - every import from the configured icon package (`ICON_PACKAGE`) in chunk code is a real export (catches hallucinated icons),
 - no brief directs agents to an entity kind that returns nothing,
+- every prop used in example code is a real prop of the documented component (catches docs teaching a build error, e.g. `<Tooltip content=…>` when the prop is `text`; intentional ✗ counter-examples are skipped),
 - one spec version across `version.js`, the README, and the loaded DSDS files.
 
 Run it with the same env the server uses, so the icon and kind checks have data:
@@ -137,7 +138,7 @@ The icon check is opt-in: it runs only when `ICON_PACKAGE` is set and that packa
 
 - Node.js 18 or later
 - An MCP-compatible client
-- ESLint v9 or later (optional — only required if using `dsds_lint_code`)
+- ESLint v9 or later (optional — only required if using the lint tools (`dsds_lint_by_path` / `dsds_lint_inline`))
 
 ---
 
@@ -188,11 +189,12 @@ Configuration is done via environment variables passed through your MCP client c
 | `DSDS_PATHS` | No | Comma-separated paths to your DSDS file(s). Required for design system access tools. |
 | `PACKAGE_EXPORT_PATHS` | No | Comma-separated `packageName=path` pairs pointing to each package root. Used by `dsds_check_exports` to verify components exist before importing. See below. |
 | `DSDS_INTRO_PATHS` | No | Comma-separated paths to DSDS files loaded as design system introductions. Content from each entity is prepended to the server instructions and exposed via the `dsds-intro` prompt. `DSDS_INTRO_PATH` (singular) still works as a single-path alias. |
-| `DSDS_SCHEMA_VERSION` | No | Override the spec version string. Defaults to `0.12.0`. |
+| `DSDS_SCHEMA_VERSION` | No | Override the spec version string. Defaults to `0.13.0`. |
 | `DSDS_FEEDBACK_DIR` | No | Directory where session feedback from `dsds_feedback` is written. Defaults to `feedback/` inside the dsds-mcp directory. |
-| `DSDS_LOGS_DIR` | No | Directory where `dsds_lint_code` writes per-session lint logs. Defaults to `logs/` inside the dsds-mcp directory. |
-| `LINT_PLUGINS` | No | Comma-separated ESLint plugin package names to use with `dsds_lint_code`. Plugins are resolved from `LINT_RESOLVE_DIR`. |
-| `LINT_RESOLVE_DIR` | No | Absolute path to the project where your ESLint plugins are installed. Defaults to the current working directory. |
+| `DSDS_LOGS_DIR` | No | Directory where the lint tools write per-session lint logs. Defaults to `logs/` inside the dsds-mcp directory. |
+| `LINT_PLUGINS` | No | Comma-separated ESLint plugin package names to use with the lint tools. Each name must be resolvable from `LINT_RESOLVE_DIR`. |
+| `LINT_RESOLVE_DIR` | No | Absolute path the plugin names are resolved from (Node module resolution is anchored here). Point it at a project that has the plugins in `node_modules/`, or at a standalone plugin's own directory (see [Linting code](#linting-code-with-eslint-plugins)). `~` is expanded. Defaults to the current working directory. |
+| `LINT_SOURCE_DIR` | No | Absolute path to the project whose code is being linted, used to resolve `dsds_lint_by_path({ path })` and as ESLint's working dir. Plugins are still resolved from `LINT_RESOLVE_DIR`. `~` is expanded. Defaults to unset. |
 
 ### Pointing at your design system
 
@@ -245,7 +247,12 @@ The server renders content from both `documentBlocks` and `agentDocumentBlocks` 
 
 ### Linting code with ESLint plugins
 
-`dsds_lint_code` runs ESLint against one or more code files using plugins installed in your project. It auto-applies all fixable violations and returns the corrected code alongside any remaining violations that need manual edits. This lets an agent validate and fix component code against your design system's lint rules before finishing a task.
+Two tools run ESLint against your code using plugins installed in your project. Both auto-apply fixable violations and return the corrected code alongside any remaining violations that need manual edits — letting an agent validate and fix component code against your design system's lint rules before finishing a task. Neither tool saves, creates, or modifies files (the harness-only `apply` flag is the sole exception):
+
+- **`dsds_lint_by_path`** — lint files already written to disk, by path. Reads from disk; a missing path returns an error explaining the tool does not create files. This is the preferred tool.
+- **`dsds_lint_inline`** — lint a source string in memory (read-only). Nothing is persisted; the result reports how many characters were checked and confirms no file was touched. Use only when the file is not yet on disk.
+
+Splitting these two modes into separate tools removes an ambiguity: there is no single call where "a path and inline source together" is coherent, so a lint call can never be mistaken for a save.
 
 **Prerequisites:**
 
@@ -282,7 +289,32 @@ Multiple plugins:
 "LINT_PLUGINS": "eslint-plugin-your-design-system,eslint-plugin-react"
 ```
 
-`LINT_RESOLVE_DIR` must point to the directory where the plugins are installed (the one that contains `node_modules/`). It defaults to cwd if not set.
+**How plugin resolution works:**
+
+Each name in `LINT_PLUGINS` is resolved with Node's normal module resolution, anchored at `LINT_RESOLVE_DIR` (it defaults to the current working directory). In other words, the MCP does the equivalent of `require("<plugin>")` *from* `LINT_RESOLVE_DIR` — so the plugin must be resolvable from there. **Do not install plugins into the dsds-mcp install directory** — when run via `npx`, that directory is transient, and for a clone it would mix your design-system config into the server's own dependencies. Point `LINT_RESOLVE_DIR` at a directory you own instead. You have three options:
+
+1. **Plugin installed in your app (most common).** Set `LINT_RESOLVE_DIR` to the project that has the plugin in its `node_modules/` (the dir containing `package.json`):
+   ```json
+   "LINT_RESOLVE_DIR": "/path/to/your/app"
+   ```
+
+2. **A standalone plugin package, resolved from its own directory.** If your plugin is its own repo (not a dependency of any app), point `LINT_RESOLVE_DIR` at the plugin directory itself and let it resolve by name via a [package self-reference](https://nodejs.org/api/packages.html#self-referencing-a-package-using-its-name). This requires the plugin's `package.json` to have an `exports` field — add one if it only has `main`:
+   ```jsonc
+   // eslint-plugin-your-design-system/package.json
+   {
+     "name": "eslint-plugin-your-design-system",
+     "main": "index.js",
+     "exports": "./index.js"
+   }
+   ```
+   ```json
+   "LINT_RESOLVE_DIR": "/path/to/eslint-plugin-your-design-system"
+   ```
+   Without the `exports` field, Node cannot self-reference the package and resolution fails with `Cannot find module 'eslint-plugin-your-design-system'`.
+
+3. **A linked plugin.** Run `npm link` in the plugin repo and `npm link eslint-plugin-your-design-system` in a project, then point `LINT_RESOLVE_DIR` at that project.
+
+> The plugins only need to be **resolvable** from `LINT_RESOLVE_DIR` — they do not have to be a declared dependency. `LINT_SOURCE_DIR` (if set by the host) governs where the *code being linted* lives; plugins are always resolved from `LINT_RESOLVE_DIR`.
 
 **How the rules are chosen:**
 
@@ -290,22 +322,22 @@ The MCP uses each plugin's `configs.recommended` ruleset if it exports one. If t
 
 **Usage by an agent:**
 
-Prefer the `files` array to lint all generated files in one call:
+Once files are written to disk, lint them by path — pass every file in one call:
 
 ```
-dsds_lint_code(files=[
-  { code: "<component tsx>", filename: "Card.tsx" },
-  { code: "<app tsx>", filename: "App.tsx" }
+dsds_lint_by_path(files=[
+  { path: "src/Card.tsx" },
+  { path: "src/App.tsx" }
 ])
 ```
 
-Single file:
+To lint a source string that is not yet on disk (read-only, nothing persisted):
 
 ```
-dsds_lint_code(code="<jsx string>", filename="Component.tsx")
+dsds_lint_inline(code="<jsx string>", filename="Component.tsx")
 ```
 
-The `filename` parameter drives parser inference (`.tsx` vs `.js`, etc.). It defaults to `Component.tsx`.
+The `filename` parameter drives parser inference (`.tsx` vs `.js`, etc.). For `dsds_lint_inline` it defaults to `Component.tsx`; for `dsds_lint_by_path` it defaults to the path.
 
 When fixes are applied, the tool returns the corrected code directly — copy it back into your files. Remaining violations (those without an autofix) are listed after the corrected code.
 
@@ -391,7 +423,10 @@ These let agents query an existing DSDS document.
 | `dsds_search_entities` | Filter entities by kind, status, tags, or a text query |
 | `dsds_get_entity` | Full documentation for an entity by identifier or name. Returns all `documentBlocks` and `agentDocumentBlocks`. |
 | `dsds_get_document_block` | One specific block (e.g. `api`, `accessibility`) from an entity — faster than fetching the full entity |
-| `dsds_get_agent_context` | Agent-optimized view of an entity. Renders content from both `agentDocumentBlocks` and `documentBlocks` (guidelines, use cases, props, sections — minus verbose accessibility and import blocks). The primary tool for understanding how to use a component. |
+| `dsds_get_agent_context` | Agent-optimized view of an entity. Leads with an **Allowed prop values** block — every closed value set (tones, numeric scales, booleans) as hard constraints, resolved from `schema.enum` → `values` → the `type` string. Then renders content from both `agentDocumentBlocks` and `documentBlocks` (guidelines, use cases, props, sections — minus verbose accessibility and import blocks). The primary tool for understanding how to use a component. |
+
+| `dsds_build_component` | Interactive wizard for implementing a documented component: `step:"start"` lists every prop with its allowed values; `step:"finalize"` with an `answers` map returns type-valid JSX (numeric values braced, strings quoted, enum values validated). Value sets resolve `schema.enum` → `values` → `type` string, so systems documented either way get full options. Returns reference JSX only — it does not write files. |
+| `dsds_author_component_doc` | Guided wizard that authors a DSDS component-documentation JSON entity from scratch — no schema knowledge needed. |
 
 **Query workflow:**
 ```
@@ -407,7 +442,8 @@ dsds_context_brief(useCase="ask") → dsds_search_entities → dsds_get_agent_co
 
 | Tool | Description |
 |------|-------------|
-| `dsds_lint_code` | Lint one or more code files using the configured ESLint plugins. Auto-applies all fixable violations and returns the corrected code. Pass all generated files in a single `files` array call. Remaining violations (no autofix available) are listed after the corrected code. |
+| `dsds_lint_by_path` | Lint one or more files already on disk, by path, using the configured ESLint plugins. Auto-applies fixable violations and returns the corrected code; a missing path errors (it never creates the file). Pass all files in a single `files` array. Does not save, create, or modify files. |
+| `dsds_lint_inline` | Lint a source string in memory (read-only). Returns findings and corrected code; nothing is read from or written to disk. Use `dsds_lint_by_path` once the file exists. |
 
 ### Export check — requires `PACKAGE_EXPORT_PATHS`
 
@@ -430,8 +466,8 @@ DSDS files are JSON documents. Every file needs `dsdsVersion` and either an `ent
 **Single entity:**
 ```json
 {
-  "$schema": "https://designsystemdocspec.org/v0.12.0/dsds.bundled.schema.json",
-  "dsdsVersion": "0.12.0",
+  "$schema": "https://designsystemdocspec.org/v0.13.0/dsds.bundled.schema.json",
+  "dsdsVersion": "0.13.0",
   "entity": {
     "kind": "component",
     "identifier": "button",
@@ -447,8 +483,8 @@ DSDS files are JSON documents. Every file needs `dsdsVersion` and either an `ent
 **Multi-entity:**
 ```json
 {
-  "$schema": "https://designsystemdocspec.org/v0.12.0/dsds.bundled.schema.json",
-  "dsdsVersion": "0.12.0",
+  "$schema": "https://designsystemdocspec.org/v0.13.0/dsds.bundled.schema.json",
+  "dsdsVersion": "0.13.0",
   "systemInfo": { "systemName": "My Design System" },
   "entityGroups": [
     { "$ref": "./components/button.dsds.json#/entity" },
@@ -482,7 +518,7 @@ The server records usage to `logs/YYYY-MM-DD.jsonl`:
 
 - **Every tool call** — `{ type: "tool", tool, ok, durationMs }`
 - **Chunk access** — `dsds_get_chunk` writes a detailed `{ type: "chunk", identifier, name }` entry
-- **Lint runs** — `dsds_lint_code` writes a detailed `{ type: "lint", … }` entry with per-file violations
+- **Lint runs** — the lint tools write a detailed `{ type: "lint", … }` entry with per-file violations
 
 Read them back with `npm run logs`. Pass options after `--`:
 

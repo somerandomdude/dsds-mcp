@@ -58,7 +58,7 @@ describe('loadConfig', () => {
   it('defaults schemaVersion to the bundled spec version', () => {
     delete process.env['DSDS_SCHEMA_VERSION'];
     const config = loadConfig();
-    expect(config.schemaVersion).toBe('0.12.0');
+    expect(config.schemaVersion).toBe('0.13.0');
   });
 
   it('uses DSDS_SCHEMA_VERSION when set', () => {

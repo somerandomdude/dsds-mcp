@@ -108,7 +108,7 @@ describe('dsds_author_component_doc', () => {
       ['select_blocks', { selectedBlocks: [] }],
       ['finalize', {}],
     ]);
-    expect(final.result.entity.documentBlocks).toEqual([]);
+    expect(final.result.entity.documentBlocks).toBeUndefined();
     expect(validateDocument(final.result).valid).toBe(true);
   });
 

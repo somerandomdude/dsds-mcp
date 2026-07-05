@@ -29,7 +29,7 @@ export function loadConfig() {
   const lintResolveDir = rawLintResolveDir ? expandHome(rawLintResolveDir.trim()) : process.cwd();
 
   // LINT_SOURCE_DIR is the root of the project being linted (where the agent's
-  // files live). When set, `dsds_lint_code({ path })` resolves paths against it
+  // files live). When set, `dsds_lint_by_path({ path })` resolves paths against it
   // and ESLint runs with it as cwd, so files written there are "inside base
   // path". Plugins are still resolved from LINT_RESOLVE_DIR. Defaults to the
   // resolve dir (current behavior) when unset.
@@ -94,6 +94,6 @@ export function loadConfig() {
     introInline,
     feedbackDir: rawFeedbackDir ? expandHome(rawFeedbackDir.trim()) : resolve(__dirname, '../feedback'),
     logsDir: rawLogsDir ? expandHome(rawLogsDir.trim()) : resolve(__dirname, '../logs'),
-    schemaVersion: process.env['DSDS_SCHEMA_VERSION'] ?? '0.12.0',
+    schemaVersion: process.env['DSDS_SCHEMA_VERSION'] ?? '0.13.0',
   };
 }

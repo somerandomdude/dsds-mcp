@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://designsystemdocspec.org/v0.12.0/dsds.bundled.schema.json",
-  "title": "Design System Documentation Spec (DSDS) v0.12.0 — Bundled",
+  "$id": "https://designsystemdocspec.org/v0.13.0/dsds.bundled.schema.json",
+  "title": "Design System Documentation Spec (DSDS) v0.13.0 — Bundled",
   "description": "Single-file bundled version of the DSDS schema. Auto-generated from the split schema files by scripts/bundle.js. Use the split files for development; use this file for tools that require a single schema document.",
   "type": "object",
   "required": [
@@ -26,7 +26,7 @@
     },
     "dsdsVersion": {
       "type": "string",
-      "const": "0.12.0",
+      "const": "0.13.0",
       "description": "The DSDS spec version this document conforms to."
     },
     "systemInfo": {
@@ -38,10 +38,11 @@
     },
     "documentBlocks": {
       "type": "array",
-      "description": "System-level structured documentation for the design system as a whole — its purpose (when to adopt the system), cross-cutting guidelines, and narrative overviews. Each entry is a general document block: a `useCases`, `guidelines`, `sections`, `accessibility`, or `content` block. This is the same `documentBlocks` mechanism entities use, scoped to the system rather than a single artifact. Position signals the scope (root vs. inside an entity).",
+      "description": "System-level structured documentation for the design system as a whole — its purpose (when to adopt the system), cross-cutting guidelines, and narrative overviews. Each entry is a general document block: a `useCases`, `guidelines`, `sections`, `accessibility`, `content`, or `checklist` block. This is the same `documentBlocks` mechanism entities use, scoped to the system rather than a single artifact. Position signals the scope (root vs. inside an entity).",
       "items": {
         "$ref": "#/$defs/generalDocumentBlock"
-      }
+      },
+      "minItems": 1
     },
     "entityGroups": {
       "type": "array",
@@ -250,7 +251,7 @@
         },
         "since": {
           "type": "string",
-          "description": "The design system version in which this criterion was introduced (e.g., '1.0.0', '2.3.0'). Criterion identifiers are stable: once published, an identifier MUST NOT be reused for a different requirement — deprecate and mint a new one instead."
+          "description": "The design system version in which this criterion was introduced (e.g., '1.0.0', '2.3.0'). Criterion identifiers are stable: once published, an identifier MUST NOT be reused for a different requirement — retire the identifier and mint a new one instead."
         }
       },
       "additionalProperties": false,
@@ -290,12 +291,36 @@
               ]
             }
           }
+        },
+        {
+          "if": {
+            "required": [
+              "check"
+            ]
+          },
+          "then": {
+            "required": [
+              "verification"
+            ]
+          }
         }
       ]
     },
+    "isoDate": {
+      "type": "string",
+      "format": "date",
+      "description": "An ISO 8601 date (YYYY-MM-DD).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "plainNote": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A plain-text note. MUST NOT contain markup and MUST NOT be empty."
+    },
     "entityIdentifier": {
       "type": "string",
-      "description": "The identifier of a documented DSDS entity (e.g., 'button', 'form-field', 'color-text-primary'). MUST match that entity's `identifier`. Tools SHOULD resolve it against the entity catalog to build navigable cross-references; a reference that resolves to nothing is a defect in the document."
+      "description": "The identifier of a documented DSDS entity (e.g., 'button', 'form-field', 'color-text-primary'). MUST match that entity's `identifier`. Tools SHOULD resolve it against the entity catalog to build navigable cross-references; a reference that resolves to nothing is a defect in the document.",
+      "minLength": 1
     },
     "entityRole": {
       "type": "string",
@@ -377,8 +402,8 @@
         },
         "url": {
           "type": "string",
-          "format": "uri",
-          "description": "URL to the base DSDS document (e.g., 'https://design.acme.com/v2/core.dsds.json', './core.dsds.json'). When provided, tools MAY fetch and resolve the base document for merge, validation, or docs generation."
+          "format": "uri-reference",
+          "description": "URL or relative path to the base DSDS document (e.g., 'https://design.acme.com/v2/core.dsds.json', './core.dsds.json'). Relative paths are resolved against this document's location. When provided, tools MAY fetch and resolve the base document for merge, validation, or docs generation."
         },
         "version": {
           "type": "string",
@@ -408,8 +433,8 @@
         },
         "url": {
           "type": "string",
-          "format": "uri",
-          "description": "Direct URL to the base entity's docs or DSDS definition. Useful for cross-linking in docs sites."
+          "format": "uri-reference",
+          "description": "URL or relative path to the base entity's docs or DSDS definition. Useful for cross-linking in docs sites."
         },
         "version": {
           "type": "string",
@@ -456,12 +481,15 @@
     },
     "extensions": {
       "type": "object",
-      "description": "Vendor-specific extensions. Keys MUST use vendor-specific namespaces (reverse domain name notation is recommended). Tools that do not recognize an extension MUST keep it. Extension data SHOULD NOT duplicate core schema fields.",
+      "description": "Vendor-specific extensions. Keys MUST use vendor-specific namespaces (reverse domain name notation is recommended) — at least two dot-separated segments, e.g. 'com.figma', 'acme.tooling'. The pattern is deliberately case-tolerant — vendors write reverse-domain namespaces as-is — unlike custom relation types, which use the stricter lowercase grammar. Tools that do not recognize an extension MUST keep it. Extension data SHOULD NOT duplicate core schema fields.",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)+$"
+      },
       "additionalProperties": true
     },
     "link": {
       "type": "object",
-      "description": "A typed pointer to an external resource. A link points to an external resource by `url` (source code, design files, docs, packages). The `kind` property sorts the reference. Standard external kinds: 'source', 'design', 'storybook', 'documentation', 'package', 'repository'. Custom values are allowed. DEPRECATED — using a link to express how entities relate is deprecated in favor of the entity's `relationships` array, which carries typed, validated edges. This covers the relationship kinds ('alternative', 'parent', 'child', 'related') and internal artifact references by `identifier` ('component', 'token', 'token-group', 'foundation', 'pattern', 'theme'). Those forms still validate for backward compatibility, but tools SHOULD warn (DSDS-010) and authors SHOULD migrate them to `relationships`. Reserve `link` for external resources addressed by `url`.",
+      "description": "A typed pointer to an external resource. A link points to an external resource by `url` (source code, design files, docs, packages). The `kind` property sorts the reference. Standard external kinds: 'source', 'design', 'storybook', 'documentation', 'package', 'repository', 'manifest' (a machine-readable component manifest, e.g. a Custom Elements Manifest). Custom values are allowed. DEPRECATED — using a link to express how entities relate is deprecated in favor of the entity's `relationships` array, which carries typed, validated edges. This covers the relationship kinds ('alternative', 'parent', 'child', 'related') and internal artifact references by `identifier` ('component', 'token', 'token-group', 'foundation', 'pattern', 'theme'). Those forms still validate for backward compatibility, but tools SHOULD warn (DSDS-010) and authors SHOULD migrate them to `relationships`. Reserve `link` for external resources addressed by `url`.",
       "required": [
         "kind"
       ],
@@ -480,7 +508,8 @@
       "properties": {
         "kind": {
           "type": "string",
-          "description": "The category of the linked resource. Standard external kinds: 'source', 'design', 'storybook', 'documentation', 'package', 'repository'. Custom values are allowed and SHOULD match ^[a-z][a-z0-9-]*$. DEPRECATED kinds — 'alternative', 'parent', 'child', 'related' (relationship kinds) and 'component', 'token', 'token-group', 'foundation', 'pattern', 'theme' (internal artifact references) are deprecated; express these as typed edges in the entity's `relationships` array instead."
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "The category of the linked resource. Standard external kinds: 'source', 'design', 'storybook', 'documentation', 'package', 'repository'. Custom values are allowed and MUST match ^[a-z][a-z0-9-]*$ (schema-enforced; all standard kinds already do). DEPRECATED kinds — 'alternative', 'parent', 'child', 'related' (relationship kinds) and 'component', 'token', 'token-group', 'foundation', 'pattern', 'theme' (internal artifact references) are deprecated; express these as typed edges in the entity's `relationships` array instead."
         },
         "url": {
           "type": "string",
@@ -507,6 +536,16 @@
       },
       "additionalProperties": false
     },
+    "mediaUrl": {
+      "type": "string",
+      "format": "uri-reference",
+      "description": "URL or relative path to a media file. Absolute URLs point at hosted assets; relative paths are resolved against the referencing document's location."
+    },
+    "mediaAlt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alternative text describing the media content for assistive technology. MUST be provided and MUST NOT be empty."
+    },
     "presentationImage": {
       "type": "object",
       "description": "An image presentation — a screenshot, diagram, annotated mockup, or exported design frame.",
@@ -522,13 +561,12 @@
           "description": "Identifies this presentation as an image."
         },
         "url": {
-          "type": "string",
-          "format": "uri",
+          "$ref": "#/$defs/mediaUrl",
           "description": "URL or relative path to the image file."
         },
         "alt": {
-          "type": "string",
-          "description": "Alternative text describing the image content. MUST be provided for accessibility."
+          "$ref": "#/$defs/mediaAlt",
+          "description": "Alternative text describing the image content. MUST be provided for accessibility and MUST NOT be empty."
         }
       },
       "additionalProperties": false
@@ -548,13 +586,12 @@
           "description": "Identifies this presentation as a video."
         },
         "url": {
-          "type": "string",
-          "format": "uri",
+          "$ref": "#/$defs/mediaUrl",
           "description": "URL or relative path to the video file."
         },
         "alt": {
-          "type": "string",
-          "description": "Alternative text describing the video content. MUST be provided for accessibility."
+          "$ref": "#/$defs/mediaAlt",
+          "description": "Alternative text describing the video content. MUST be provided for accessibility and MUST NOT be empty."
         }
       },
       "additionalProperties": false
@@ -575,7 +612,8 @@
         },
         "code": {
           "type": "string",
-          "description": "The source code of the example."
+          "description": "The source code of the example.",
+          "minLength": 1
         },
         "language": {
           "type": "string",
@@ -666,12 +704,18 @@
     },
     "richText": {
       "type": "string",
-      "description": "Human-written prose, read as CommonMark markdown (0.27 minimum). No format flag is needed. Plain sentences and inline HTML are both valid markdown, so write plain text, markdown, or embedded HTML as the content needs. Tools MUST render the value as markdown."
+      "description": "Human-written prose, read as CommonMark markdown (0.27 minimum). No format flag is needed. Plain sentences and inline HTML are both valid markdown, so write plain text, markdown, or embedded HTML as the content needs. Tools MUST render the value as markdown.",
+      "minLength": 1
     },
     "statusValue": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*$",
       "description": "A lifecycle status value. MUST be lowercase kebab-case. Standard values: 'draft' (under development, not ready for use), 'experimental' (available, but the API may change without notice), 'stable' (production-ready; changes follow semver), 'deprecated' (scheduled for removal). Custom values are allowed (e.g., 'sunset', 'archived', 'beta') and MUST follow the same pattern."
+    },
+    "deprecationNotice": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A non-empty notice for a deprecated artifact. MUST say what to use instead and, where one exists, give a migration path. Shared by the platform-level and entity-level status forms so the non-empty rule lives in one place."
     },
     "platformStatus": {
       "type": "object",
@@ -689,8 +733,8 @@
           "description": "The version in which this artifact became available on this platform."
         },
         "deprecationNotice": {
-          "type": "string",
-          "description": "Required when status is 'deprecated'. Says what to use instead on this platform."
+          "$ref": "#/$defs/deprecationNotice",
+          "description": "Required when status is 'deprecated'. Says what to use instead on this platform. MUST NOT be empty."
         },
         "description": {
           "type": "string",
@@ -720,11 +764,11 @@
       "properties": {
         "systemName": {
           "type": "string",
-          "description": "The name of the design system."
+          "description": "Display name of the design system (e.g., 'Acme Design System'). A human-readable name, not a package name — package identifiers belong in `extends.system` or platform imports."
         },
         "systemVersion": {
           "type": "string",
-          "description": "The version of the design system."
+          "description": "Version of the design system this documentation describes (e.g., '2.3.0'). SHOULD follow semver so tools can compare against `extends.version` and `reviewedAgainst` values."
         },
         "organization": {
           "type": "string",
@@ -737,10 +781,28 @@
         },
         "license": {
           "type": "string",
-          "description": "SPDX license identifier or license URL."
+          "description": "License of the design system, as an SPDX identifier (e.g., 'MIT', 'Apache-2.0') or a URL to the license text."
         }
       },
       "additionalProperties": false
+    },
+    "tokenOverrides": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Design token overrides for one part, variant value, or state. Keys are token-purpose names describing the visual attribute the token controls (e.g., 'background', 'text-color', 'border-radius', 'padding-horizontal'). Values are token `identifier` references (e.g., 'color-action-primary', 'radius-md') and follow the same resolution rule as every entity reference: in a system that documents its token layer, they MUST resolve to a documented token. Validators resolve them when a token layer is present (see entityRef resolution). Raw values (e.g., '#ffffff', '4px') are not valid here; token-less systems document raw values in design-specifications, not in token-override maps.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/entityIdentifier"
+      },
+      "examples": [
+        {
+          "background": "color-action-primary",
+          "text-color": "color-text-on-action",
+          "border-radius": "radius-md"
+        }
+      ]
     },
     "useCase": {
       "type": "object",
@@ -770,7 +832,7 @@
           ],
           "properties": {
             "identifier": {
-              "type": "string",
+              "$ref": "#/$defs/entityIdentifier",
               "description": "The identifier of the recommended alternative artifact (e.g., 'link', 'radio-group', 'icon-button', 'empty-state')."
             },
             "rationale": {
@@ -814,26 +876,208 @@
     "aliases": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       },
       "minItems": 1,
-      "description": "Alternative names for this entity across teams, tools, or legacy systems. Used for search, migration, and cross-referencing."
+      "description": "Alternative names for this entity across teams, tools, or legacy systems. Used for search, migration, and cross-referencing.",
+      "uniqueItems": true
     },
     "category": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*$",
       "description": "Where this entity fits in the design system's taxonomy (e.g., 'action', 'navigation', 'feedback', 'base', 'semantic'). MUST be lowercase kebab-case."
     },
-    "extends": {
-      "$ref": "#/$defs/entityExtends",
-      "description": "Declares that this entity inherits from a base entity in a parent design system."
+    "authorshipValue": {
+      "type": "string",
+      "description": "Who or what wrote the documentation's words. Orthogonal to origin: origin says what the doc was produced from; authorship says what produced it. 'human': written by a person with no AI or script involvement. 'ai-assisted': human-led, with an AI model drafting or editing portions under human direction and review. 'ai-generated': produced by an AI model or agent with at most light human review; MAY contain plausible-but-wrong statements and SHOULD be verified before an agent treats it as ground truth. 'machine-assisted': human-led, with deterministic tooling (scripts, doc generators) producing portions such as tables or listings. 'machine-generated': produced end-to-end by deterministic tooling with no human or AI synthesis; exactly as trustworthy as its source and pipeline. The AI values and the machine values differ in reproducibility: machine output is determined by its input; AI output is not. When both AI and scripts contributed, record the AI value — AI involvement is what consumers most need to know.",
+      "enum": [
+        "human",
+        "ai-assisted",
+        "ai-generated",
+        "machine-assisted",
+        "machine-generated"
+      ]
+    },
+    "docOriginValue": {
+      "type": "string",
+      "description": "How the documentation was produced, relative to the implementation. 'authored': written before or alongside the implementation as its specification — the code follows the doc; authoritative for intent, but MAY lag the shipped API. 'generated': produced by automated tooling from source artifacts (type definitions, doc comments) without human synthesis; high fidelity to the API, silent on intent. 'extracted': derived by a human or agent reading the existing implementation (source, stories, tests) after the fact; describes what exists. 'reconstructed': written after the fact from institutional knowledge, without systematically consulting the implementation; lowest fidelity to the API and SHOULD be verified before an agent relies on it for API facts. Agents SHOULD prefer 'generated' and 'extracted' documentation for API accuracy and 'authored' documentation for design intent.",
+      "enum": [
+        "authored",
+        "generated",
+        "extracted",
+        "reconstructed"
+      ]
+    },
+    "docOrigin": {
+      "description": "How this entity's documentation came to exist. A bare string sets the overall origin (e.g., 'extracted') and covers the common case. Use the object form when the document has mixed origins — a prop table extracted from code inside otherwise authored guidance — or when the origin needs explaining. Origin describes production, not quality: it records how the words got here so consumers can decide how much to trust which parts.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/docOriginValue"
+        },
+        {
+          "type": "object",
+          "description": "Full docOrigin form: the overall origin, the authorship, an optional explanatory note, and per-block overrides. A document MAY be 'authored' overall while individual blocks were 'extracted' or 'generated'.",
+          "required": [
+            "overall"
+          ],
+          "properties": {
+            "overall": {
+              "$ref": "#/$defs/docOriginValue",
+              "description": "The dominant origin of the document as a whole. When blocks differ, choose the origin of the document's substantive prose; record exceptions in `blocks`."
+            },
+            "authorship": {
+              "$ref": "#/$defs/authorshipValue",
+              "description": "Who or what wrote the document's words, as a single value for the document as a whole. When production was mixed, record the least-supervised method that contributed substantively (a mostly human doc with AI-drafted sections is 'ai-assisted'). Note the interaction with origin: an origin of 'generated' implies 'machine-generated' or 'ai-generated' authorship — the schema rejects other pairings when both fields are set."
+            },
+            "note": {
+              "$ref": "#/$defs/plainNote",
+              "description": "Plain-text note explaining the origin (e.g., 'Authored as the spec for the v3 rebuild; prop table regenerated from source on each release'). MUST NOT contain markup."
+            },
+            "blocks": {
+              "type": "object",
+              "description": "Per-block overrides for blocks whose origin or authorship differs from the document-level values. Keys are document block kinds (e.g., 'api', 'guidelines', 'accessibility') matching the `kind` of a block in this entity's `documentBlocks` or `agentDocumentBlocks`. A value is either a bare origin string (the common case) or an object carrying `origin` and/or `authorship` when the block's production method also differs — an authored, human-written doc whose prop table is AI-generated records that here. List only the exceptions. A key that matches no block in the entity is a defect in the document (validators resolve keys against the entity's blocks).",
+              "minProperties": 1,
+              "propertyNames": {
+                "pattern": "^[a-z][a-zA-Z0-9-]*$"
+              },
+              "additionalProperties": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/docOriginValue"
+                  },
+                  {
+                    "type": "object",
+                    "description": "Full per-block override: the block's origin and/or authorship, when either differs from the document-level value. At least one is required.",
+                    "minProperties": 1,
+                    "properties": {
+                      "origin": {
+                        "$ref": "#/$defs/docOriginValue",
+                        "description": "This block's origin, when it differs from `overall`."
+                      },
+                      "authorship": {
+                        "$ref": "#/$defs/authorshipValue",
+                        "description": "This block's authorship, when it differs from the document-level `authorship`."
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "overall": {
+                "const": "generated"
+              }
+            },
+            "required": [
+              "authorship"
+            ]
+          },
+          "then": {
+            "properties": {
+              "authorship": {
+                "enum": [
+                  "ai-generated",
+                  "machine-generated"
+                ]
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "owner": {
+      "description": "The party accountable for this entity's documentation. A bare string names the owner and covers the common case. Use the object form to add contact details. Owners SHOULD be teams, roles, or group aliases (e.g., 'Design Systems', '@acme/design-system') rather than named individuals — person-level ownership goes stale on turnover, which is the exact situation this field exists for. Tools SHOULD surface the owner wherever a reader might need to escalate a discrepancy.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Name or alias of the owning team, role, or group (e.g., 'Design Systems', '@acme/design-system').",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "description": "Full owner form: the owning party's name plus a contact route.",
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Name or alias of the owning team, role, or group (e.g., 'Design Systems'). SHOULD name a team or role, not an individual.",
+              "minLength": 1
+            },
+            "contact": {
+              "type": "string",
+              "description": "How to reach the owner: a URL, email address, or channel reference (e.g., 'https://github.com/orgs/acme/teams/design-system', 'design-system@acme.com', '#design-system'). Freeform; tools SHOULD render it as a link when it parses as a URL or email.",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "lastReviewed": {
+      "description": "When a human last confirmed this entity's documentation is accurate. A bare ISO 8601 date string ('2026-06-12') covers the common case. Use the object form to record who reviewed and what they concluded. Reviewing does not imply changing: a review that finds the doc correct updates `lastReviewed` and leaves `lastUpdated` alone. Tools MAY treat an old or absent `lastReviewed` as a staleness signal, and agents SHOULD prefer recently reviewed documentation when sources conflict.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/isoDate",
+          "description": "ISO 8601 date (YYYY-MM-DD) of the most recent review of this entity's documentation."
+        },
+        {
+          "type": "object",
+          "description": "Full lastReviewed form: the date plus who reviewed, what version it was verified against, and an optional note on the outcome.",
+          "required": [
+            "date"
+          ],
+          "properties": {
+            "date": {
+              "$ref": "#/$defs/isoDate",
+              "description": "ISO 8601 date (YYYY-MM-DD) of the most recent review of this entity's documentation."
+            },
+            "reviewedBy": {
+              "type": "string",
+              "description": "Who performed the review — a team, role, or individual (e.g., 'Design Systems', 'jane.doe'). Unlike `owner`, naming an individual here is fine: it records a historical fact, not a standing responsibility.",
+              "minLength": 1
+            },
+            "note": {
+              "$ref": "#/$defs/plainNote",
+              "description": "Plain-text note on the review outcome (e.g., 'Verified against v3.1; prop table still accurate', 'Guidelines section needs a rewrite — tracked in DS-412'). MUST NOT contain markup."
+            },
+            "reviewedAgainst": {
+              "type": "string",
+              "description": "The implementation version the documentation was verified against in this review, as a package version or release identifier (e.g., '@acme/ui@3.1.0', '3.1.0'). Lets tools detect drift: if the implementation has moved past this version, the documentation MAY be out of date even if recently reviewed. Nested inside the review record so it structurally cannot exist without one.",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "governance": {
+      "type": "object",
+      "description": "Accountability and review state for this entity's documentation. `owner` is required — a governance object that names no owner answers none of the questions the field exists for. `lastReviewed` is optional but SHOULD be set once a review process exists; its object form records who reviewed and which implementation version was verified (`reviewedAgainst`), so a tool can answer 'is this doc verified, against which version, and who vouches for it.'",
+      "required": [
+        "owner"
+      ],
+      "properties": {
+        "owner": {
+          "$ref": "#/$defs/owner"
+        },
+        "lastReviewed": {
+          "$ref": "#/$defs/lastReviewed"
+        }
+      },
+      "additionalProperties": false
     },
     "lastUpdated": {
       "description": "When this entity's documentation last changed. A bare ISO 8601 date string ('2026-05-28') covers the common case. Use the object form to add a note describing what changed.",
       "oneOf": [
         {
-          "type": "string",
-          "format": "date",
+          "$ref": "#/$defs/isoDate",
           "description": "ISO 8601 date (YYYY-MM-DD) of the most recent update to this entity's documentation."
         },
         {
@@ -844,12 +1088,11 @@
           ],
           "properties": {
             "date": {
-              "type": "string",
-              "format": "date",
+              "$ref": "#/$defs/isoDate",
               "description": "ISO 8601 date (YYYY-MM-DD) of the most recent update to this entity's documentation."
             },
             "note": {
-              "type": "string",
+              "$ref": "#/$defs/plainNote",
               "description": "Plain-text note summarizing what changed in the most recent update (e.g., 'Added focus-visible guidance', 'Revised contrast requirements for inverse surfaces'). MUST NOT contain markup."
             }
           },
@@ -863,11 +1106,11 @@
         "$ref": "#/$defs/link"
       },
       "minItems": 1,
-      "description": "Links to outside resources and internal artifacts, plus links that show how entities relate. Examples: source code, design files, docs pages, and related entities."
+      "description": "Links to external resources. Examples: source code, design files, docs pages, packages. Expressing how entities relate through links is deprecated (DSDS-010) — use the entity's `relationships` array for typed edges."
     },
     "entityMetadata": {
       "type": "object",
-      "description": "Optional metadata for an entity, keyed by field name. Include only the fields that apply. Covers lifecycle (status, since, lastUpdated), classification and discovery (category, tags, aliases), compact display (summary, thumbnail, preview), inheritance (extends), and references (links).",
+      "description": "Optional metadata for an entity, keyed by field name. Include only the fields that apply. Covers lifecycle (status, since, lastUpdated), classification and discovery (category, tags, aliases), compact display (summary, thumbnail, preview), inheritance (extends), references (links), and documentation accountability and provenance (governance, docOrigin — both initial drafts).",
       "properties": {
         "status": {
           "$ref": "#/$defs/status"
@@ -897,13 +1140,20 @@
           "$ref": "#/$defs/preview"
         },
         "extends": {
-          "$ref": "#/$defs/extends"
+          "$ref": "#/$defs/entityExtends"
         },
         "links": {
           "$ref": "#/$defs/links"
+        },
+        "governance": {
+          "$ref": "#/$defs/governance"
+        },
+        "docOrigin": {
+          "$ref": "#/$defs/docOrigin"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "minProperties": 1
     },
     "preview": {
       "description": "A visual or interactive preview of the entity — an image, video, code snippet, or URL. The value is a presentation object. Its `kind` tag selects the media type.",
@@ -924,7 +1174,8 @@
     },
     "since": {
       "type": "string",
-      "description": "The design system version in which this entity was introduced (e.g., '1.0.0', '2.3.0')."
+      "description": "The design system version in which this entity was introduced (e.g., '1.0.0', '2.3.0').",
+      "minLength": 1
     },
     "status": {
       "description": "Lifecycle status of the entity. A bare string sets the overall status (e.g., 'stable', 'beta') and covers the common case. Use the object form to add per-platform readiness, an explanatory note, or a deprecation notice. A deprecated entity MUST use the object form, because deprecation needs a deprecationNotice that says what to use instead.",
@@ -955,11 +1206,15 @@
               "description": "Per-platform readiness. Keys are platform identifiers (freeform strings; common values include 'react', 'web-component', 'ios', 'android', 'flutter', 'figma', 'sketch', 'compose'). Values describe the entity's status on that platform.",
               "additionalProperties": {
                 "$ref": "#/$defs/platformStatus"
+              },
+              "minProperties": 1,
+              "propertyNames": {
+                "pattern": "^[a-z][a-z0-9-]*$"
               }
             },
             "deprecationNotice": {
-              "type": "string",
-              "description": "Required when overall status is 'deprecated'. MUST say what to use instead and give a migration path. Tools SHOULD display this prominently next to the status indicator."
+              "$ref": "#/$defs/deprecationNotice",
+              "description": "Required when overall status is 'deprecated'. MUST say what to use instead (non-empty) and give a migration path. Tools SHOULD display this prominently next to the status indicator."
             }
           },
           "if": {
@@ -980,15 +1235,18 @@
     },
     "summary": {
       "type": "string",
-      "description": "One-line plain-text summary for compact display contexts (list views, search results, hover cards). MUST NOT contain markup."
+      "description": "One-line plain-text summary for compact display contexts (list views, search results, hover cards). MUST NOT contain markup.",
+      "minLength": 1
     },
     "tags": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       },
       "minItems": 1,
-      "description": "Freeform keywords for grouping, search, and cross-referencing."
+      "description": "Freeform keywords for grouping, search, and cross-referencing.",
+      "uniqueItems": true
     },
     "thumbnail": {
       "type": "object",
@@ -999,13 +1257,12 @@
       ],
       "properties": {
         "url": {
-          "type": "string",
-          "format": "uri",
+          "$ref": "#/$defs/mediaUrl",
           "description": "URL or relative path to the thumbnail image."
         },
         "alt": {
-          "type": "string",
-          "description": "Alternative text describing the thumbnail image. MUST be provided for accessibility."
+          "$ref": "#/$defs/mediaAlt",
+          "description": "Alternative text describing the thumbnail image. MUST be provided for accessibility and MUST NOT be empty."
         }
       },
       "additionalProperties": false
@@ -1061,7 +1318,7 @@
       },
       "additionalProperties": false
     },
-    "colorContrast": {
+    "colorContrastEntry": {
       "type": "object",
       "description": "A foreground/background color pairing the artifact uses. The pair is the documentation — which combinations occur, and where. Measured contrast ratios are conformance results, not documentation: verify pairs with a criterion (verification: automated) whose check computes ratios from live token values, so the measurement cannot drift from the palette.",
       "required": [
@@ -1116,6 +1373,7 @@
         "keyboardInteractions": {
           "type": "array",
           "description": "Keyboard interaction specs: what happens when each key or key combination is pressed while the artifact has focus.",
+          "minItems": 1,
           "items": {
             "$ref": "#/$defs/keyboardInteraction"
           }
@@ -1123,6 +1381,7 @@
         "ariaAttributes": {
           "type": "array",
           "description": "ARIA attribute docs. Lists every ARIA attribute the artifact uses, what it communicates, and when to apply it.",
+          "minItems": 1,
           "items": {
             "$ref": "#/$defs/ariaAttribute"
           }
@@ -1146,8 +1405,9 @@
         "colorContrast": {
           "type": "array",
           "description": "The foreground/background color pairings this artifact uses, one entry per pairing. Pairs are declarations of intent; measure them with an automated contrast criterion, not by hand.",
+          "minItems": 1,
           "items": {
-            "$ref": "#/$defs/colorContrast"
+            "$ref": "#/$defs/colorContrastEntry"
           }
         },
         "reducedMotion": {
@@ -1290,25 +1550,16 @@
           "description": "Whether this part is always present in the rendered output. Defaults to false. When false, the part is conditionally rendered based on props or content."
         },
         "tokens": {
-          "type": "object",
-          "description": "Design tokens applied to this part. Keys are token-purpose names that say what visual attribute the token controls (e.g., 'background', 'border-radius', 'padding-horizontal', 'text-color'). Values are entity references to the token that supplies the value: each is a token `identifier` (e.g., 'color-action-primary', 'radius-md', 'space-4') and follows the same resolution rule as every entity reference. In a system that documents its token layer, these MUST resolve to a documented token, so a part's styling can't silently drift from the token source. Validators resolve them when a token layer is present (see entityRef resolution).",
-          "additionalProperties": {
-            "$ref": "#/$defs/entityIdentifier"
-          },
-          "examples": [
-            {
-              "background": "color-action-primary",
-              "text-color": "color-text-on-action",
-              "border-radius": "radius-md"
-            }
-          ]
+          "$ref": "#/$defs/tokenOverrides",
+          "description": "Design tokens applied to this part, as the shared token-override map: keys are token-purpose names, values are documented token identifiers."
         },
         "links": {
           "type": "array",
           "description": "Links to resources for this anatomy part: design tool nodes, source code blocks, documentation sections, or other addressable references.",
           "items": {
             "$ref": "#/$defs/link"
-          }
+          },
+          "minItems": 1
         }
       },
       "additionalProperties": false
@@ -1343,7 +1594,8 @@
           "description": "Examples of the anatomy, typically annotated diagrams with numbered callouts that map to the parts array. Multiple examples allow different views (e.g., expanded vs. collapsed, with icon vs. without).",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         }
       },
       "additionalProperties": false
@@ -1363,18 +1615,19 @@
         },
         "type": {
           "type": "string",
-          "description": "The property's type as it would appear in a type signature (e.g., 'boolean', 'number', 'string', 'ReactNode', 'IconComponent'). For enum properties, use `values` instead of listing members here."
+          "description": "The property's type as it would appear in a type signature (e.g., 'boolean', 'number', 'string', 'ReactNode', 'IconComponent'). For enum properties, use `values` instead of listing members here. When `schema` is present it is authoritative; `type` is its display summary and MUST NOT disagree with it."
         },
         "values": {
           "type": "array",
-          "description": "The accepted values for enum-like properties (e.g., ['default', 'primary', 'ghost']). Use this instead of listing members in `type`.",
+          "description": "The accepted values for enum-like properties (e.g., ['default', 'primary', 'ghost']). Use this instead of listing members in `type`. When `schema` is present it is authoritative; `values` is its display summary and MUST NOT disagree with it.",
           "items": {
             "type": "string"
-          }
+          },
+          "minItems": 1
         },
         "schema": {
           "type": "object",
-          "description": "A JSON Schema (Draft 2020-12) object that defines the property's type in machine-readable form. It follows the same conventions as OpenAPI parameter schemas."
+          "description": "A JSON Schema (Draft 2020-12) object that defines the property's type in machine-readable form. It follows the same conventions as OpenAPI parameter schemas. When present, `schema` is the authoritative type definition; `type` and `values` are display summaries of it and MUST NOT disagree."
         },
         "description": {
           "$ref": "#/$defs/richText",
@@ -1393,7 +1646,8 @@
           "description": "Example values for this property.",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         },
         "since": {
           "type": "string",
@@ -1429,7 +1683,7 @@
         },
         "returns": {
           "type": "string",
-          "description": "Description of the event return shape (e.g., '(event: MouseEvent) => void', '{ value: string, index: number }')."
+          "description": "The event's payload or handler signature (e.g., '(event: MouseEvent) => void', '{ value: string, index: number }'). Emitted events do not return values; this documents what a listener receives."
         },
         "since": {
           "type": "string",
@@ -1452,7 +1706,7 @@
         },
         "description": {
           "$ref": "#/$defs/richText",
-          "description": "What content this slot accepts and any constraints on its children."
+          "description": "The slot's purpose and where it renders in the component. Content rules belong in `acceptedContent`, not here."
         },
         "acceptedContent": {
           "$ref": "#/$defs/richText",
@@ -1542,7 +1796,8 @@
           "items": {
             "type": "string"
           },
-          "description": "The set of possible values (e.g., ['default', 'hover', 'active', 'disabled'])."
+          "description": "The set of possible values (e.g., ['default', 'hover', 'active', 'disabled']).",
+          "minItems": 1
         },
         "since": {
           "type": "string",
@@ -1601,6 +1856,7 @@
         "properties": {
           "type": "array",
           "description": "Configurable properties (props, attributes, inputs) that consumers pass to the component.",
+          "minItems": 1,
           "items": {
             "$ref": "#/$defs/apiProperty"
           }
@@ -1608,6 +1864,7 @@
         "events": {
           "type": "array",
           "description": "Events emitted by the component that consumers can listen to.",
+          "minItems": 1,
           "items": {
             "$ref": "#/$defs/apiEvent"
           }
@@ -1615,6 +1872,7 @@
         "slots": {
           "type": "array",
           "description": "Content insertion points where consumers can project child content.",
+          "minItems": 1,
           "items": {
             "$ref": "#/$defs/apiSlot"
           }
@@ -1622,6 +1880,7 @@
         "cssCustomProperties": {
           "type": "array",
           "description": "CSS custom properties exposed for external styling.",
+          "minItems": 1,
           "items": {
             "$ref": "#/$defs/apiCssCustomProperty"
           }
@@ -1629,6 +1888,7 @@
         "cssParts": {
           "type": "array",
           "description": "CSS shadow parts exposed for external styling via ::part() selectors.",
+          "minItems": 1,
           "items": {
             "$ref": "#/$defs/apiCssPart"
           }
@@ -1636,6 +1896,7 @@
         "dataAttributes": {
           "type": "array",
           "description": "Data attributes that reflect component state or config into the DOM.",
+          "minItems": 1,
           "items": {
             "$ref": "#/$defs/apiDataAttribute"
           }
@@ -1643,6 +1904,7 @@
         "methods": {
           "type": "array",
           "description": "Public methods on the component instance.",
+          "minItems": 1,
           "items": {
             "$ref": "#/$defs/apiMethod"
           }
@@ -1725,7 +1987,7 @@
     },
     "checklist": {
       "type": "object",
-      "description": "An explicit checklist for an artifact: a list of concrete items an agent (or a person) works through when building, reviewing, or integrating it. Each item is a checklistItem with an actionable label and an optional level, detail, and criterion link. Use it to turn an artifact's rules into an explicit pass: 'an accessibility review', 'before you ship', 'integration steps'. Accepted on component, foundation, and pattern entities, and equally at home in `agentDocumentBlocks`.",
+      "description": "An explicit checklist for an artifact: a list of concrete items an agent (or a person) works through when building, reviewing, or integrating it. Each item is a checklistItem with an actionable label and an optional level, detail, and criterion link. Use it to turn an artifact's rules into an explicit pass: 'an accessibility review', 'before you ship', 'integration steps'. A general block kind, accepted on every entity type, and equally at home in `agentDocumentBlocks`.",
       "required": [
         "kind",
         "items"
@@ -1781,7 +2043,8 @@
           "items": {
             "type": "string"
           },
-          "description": "Related terms that serve a different purpose but are often confused with this one. Listed for comparison, to help authors pick the right label. The terms SHOULD match other `term` values in the same content guideline so tools can cross-reference them."
+          "description": "Related terms that serve a different purpose but are often confused with this one. Listed for comparison, to help authors pick the right label. The terms SHOULD match other `term` values in this content block's `labels` array — the block is the dictionary they resolve against, so tools can cross-reference them.",
+          "minItems": 1
         },
         "context": {
           "type": "string",
@@ -1792,7 +2055,8 @@
           "description": "Visual or code examples showing the label in context: do/don't pairs, screenshots of correct usage, or code snippets.",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         }
       },
       "additionalProperties": false
@@ -1818,7 +2082,8 @@
           "description": "Visual or code examples that illustrate the concern: before/after screenshots for RTL, samples of text expansion, or code patterns for pluralization.",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         }
       },
       "additionalProperties": false
@@ -1899,7 +2164,8 @@
           "text-color": "button-primary-text",
           "border-color": "button-primary-border"
         }
-      ]
+      ],
+      "minProperties": 1
     },
     "spacingSpec": {
       "type": "object",
@@ -1920,7 +2186,8 @@
           }
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "minProperties": 1
     },
     "sizingSpec": {
       "type": "object",
@@ -1947,7 +2214,8 @@
           "description": "Aspect ratio constraint as a ratio string (e.g., '16/9', '1/1', '4/3')."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "minProperties": 1
     },
     "typographyEntrySpec": {
       "type": "object",
@@ -1982,14 +2250,16 @@
           "description": "A composite typography token covering multiple typographic properties (e.g., '$body-compact-01', 'type-scale-body-sm'). When provided, individual properties (fontSize, fontWeight, etc.) document what the token resolves to."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "minProperties": 1
     },
     "typographySpec": {
       "type": "object",
       "description": "Typographic specs for text content within the component. Keys are named text elements matching anatomy parts (e.g., 'label', 'helper-text', 'heading', 'body'). Values are typographyEntrySpec objects.",
       "additionalProperties": {
         "$ref": "#/$defs/typographyEntrySpec"
-      }
+      },
+      "minProperties": 1
     },
     "responsiveEntry": {
       "type": "object",
@@ -2043,7 +2313,8 @@
           "description": "Responsive behavior describing how the component adapts across breakpoints. Entries are ordered from smallest to largest breakpoint.",
           "items": {
             "$ref": "#/$defs/responsiveEntry"
-          }
+          },
+          "minItems": 1
         }
       },
       "anyOf": [
@@ -2078,6 +2349,21 @@
     "generalBranches": {
       "description": "Shared `if`/`then` branches for the general block kinds. A fragment composed into every scoped union via allOf; it carries no `kind` enum of its own (the enclosing union owns that). For a non-general `kind`, every `if` here is false and the fragment passes vacuously.",
       "allOf": [
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "checklist"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/checklist"
+          }
+        },
         {
           "if": {
             "required": [
@@ -2156,7 +2442,7 @@
       ]
     },
     "generalDocumentBlock": {
-      "description": "A document block kind available on every artifact type. General blocks cover concerns that apply to any artifact, including free-form prose. Every scoped union includes these kinds.",
+      "description": "A document block kind available on every artifact type. General blocks cover concerns that apply to any artifact, including free-form prose and the agent-oriented checklist. Every scoped union includes these kinds.",
       "type": "object",
       "required": [
         "kind"
@@ -2164,6 +2450,7 @@
       "properties": {
         "kind": {
           "enum": [
+            "checklist",
             "guidelines",
             "useCases",
             "accessibility",
@@ -2179,7 +2466,7 @@
       ]
     },
     "componentDocumentBlock": {
-      "description": "A document block kind accepted on component artifacts. Includes the component-specific kinds (imports, anatomy, API, variants, states, design specs), the shared checklist kind, and every general kind.",
+      "description": "A document block kind accepted on component artifacts. Includes the component-specific kinds (imports, anatomy, API, variants, states, design specs) and every general kind, including checklist.",
       "type": "object",
       "required": [
         "kind"
@@ -2203,21 +2490,6 @@
         }
       },
       "allOf": [
-        {
-          "if": {
-            "required": [
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "const": "checklist"
-              }
-            }
-          },
-          "then": {
-            "$ref": "#/$defs/checklist"
-          }
-        },
         {
           "if": {
             "required": [
@@ -2314,7 +2586,7 @@
       ]
     },
     "foundationDocumentBlock": {
-      "description": "A document block kind accepted on foundation artifacts. Includes the foundation-specific kinds (principles, scales, motion), the shared checklist kind, and every general kind.",
+      "description": "A document block kind accepted on foundation artifacts. Includes the foundation-specific kinds (principles, scale, motion) and every general kind, including checklist.",
       "type": "object",
       "required": [
         "kind"
@@ -2335,21 +2607,6 @@
         }
       },
       "allOf": [
-        {
-          "if": {
-            "required": [
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "const": "checklist"
-              }
-            }
-          },
-          "then": {
-            "$ref": "#/$defs/checklist"
-          }
-        },
         {
           "if": {
             "required": [
@@ -2401,7 +2658,7 @@
       ]
     },
     "patternDocumentBlock": {
-      "description": "A document block kind accepted on pattern artifacts. Includes the pattern-specific kind (interactions), shared structural kinds (anatomy, variants, states), the shared checklist kind, and every general kind.",
+      "description": "A document block kind accepted on pattern artifacts. Includes the pattern-specific kind (interactions), shared structural kinds (anatomy, variants, states), and every general kind, including checklist.",
       "type": "object",
       "required": [
         "kind"
@@ -2423,21 +2680,6 @@
         }
       },
       "allOf": [
-        {
-          "if": {
-            "required": [
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "const": "checklist"
-              }
-            }
-          },
-          "then": {
-            "$ref": "#/$defs/checklist"
-          }
-        },
         {
           "if": {
             "required": [
@@ -2503,12 +2745,8 @@
         }
       ]
     },
-    "tokenDocumentBlock": {
-      "description": "A document block kind accepted on token, token-group, and theme artifacts. These accept the general kinds only (see `generalDocumentBlock`).",
-      "$ref": "#/$defs/generalDocumentBlock"
-    },
     "guideDocumentBlock": {
-      "description": "A document block kind accepted on guide artifacts. It includes the guide-only `steps` kind, the reused `imports` kind for setup and install steps, and every general kind. One of those is the free-form `sections` block, the backbone of a guide. Guides are made for reading, so their blocks favor prose and steps over the measurable specs (api, anatomy, design specs) that components use.",
+      "description": "A document block kind accepted on guide artifacts. It includes the guide-only `steps` kind, the reused `imports` kind for setup and install steps, and every general kind (including `checklist` — a contribution or migration guide often ends in a verification pass). One of those is the free-form `sections` block, the backbone of a guide. Guides are made for reading, so their blocks favor prose and steps over the measurable specs (api, anatomy, design specs) that components use.",
       "type": "object",
       "required": [
         "kind"
@@ -2518,6 +2756,7 @@
           "enum": [
             "steps",
             "imports",
+            "checklist",
             "guidelines",
             "useCases",
             "accessibility",
@@ -2615,14 +2854,16 @@
           "description": "Examples showing encouraged and discouraged approaches.",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         },
         "tags": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "Freeform keywords that relate guidelines across categories and disciplines (e.g., 'rtl', 'localization', 'validation', 'contrast')."
+          "description": "Freeform keywords that relate guidelines across categories and disciplines (e.g., 'rtl', 'localization', 'validation', 'contrast').",
+          "minItems": 1
         }
       },
       "additionalProperties": false
@@ -2737,7 +2978,8 @@
           "description": "Visual or interactive examples for this step: screenshots of the resulting state, screen recordings of the transition, or code snippets showing the implementation.",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         }
       },
       "additionalProperties": false
@@ -2768,7 +3010,24 @@
     },
     "motionDuration": {
       "type": "object",
-      "description": "A recommended duration range for an easing curve. Duration values are strings: a time value (e.g., '200ms', '0.3s') or a token reference (e.g., 'duration-quick'). When both min and max are provided, they define a range. When only one is provided, it serves as a single recommendation. When neither is provided, the description field should explain the guidance.",
+      "description": "A recommended duration range for an easing curve. Duration values are strings: a time value (e.g., '200ms', '0.3s') or a token reference (e.g., 'duration-quick'). When both min and max are provided, they define a range. When only one is provided, it serves as a single recommendation. When neither is provided, the description field MUST explain the guidance — an empty duration object carries no information, so at least one of min, max, or description is required.",
+      "anyOf": [
+        {
+          "required": [
+            "min"
+          ]
+        },
+        {
+          "required": [
+            "max"
+          ]
+        },
+        {
+          "required": [
+            "description"
+          ]
+        }
+      ],
       "properties": {
         "min": {
           "type": "string",
@@ -2808,11 +3067,30 @@
         "function": {
           "type": "array",
           "description": "Cubic-bezier control points as a four-number array [P1x, P1y, P2x, P2y], aligned with the W3C Design Tokens Format Module cubicBezier type (§8.6). P1x and P2x MUST be in [0, 1]. P1y and P2y can be any real number (values outside [0, 1] produce bounce/overshoot effects). Maps to CSS cubic-bezier() and DTCG cubicBezier token values. When omitted, the easing is described in the description field or points to a token via `token`.",
-          "items": {
-            "type": "number"
-          },
           "minItems": 4,
-          "maxItems": 4
+          "maxItems": 4,
+          "prefixItems": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "P1x — MUST be in [0, 1]."
+            },
+            {
+              "type": "number",
+              "description": "P1y — any real number."
+            },
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "P2x — MUST be in [0, 1]."
+            },
+            {
+              "type": "number",
+              "description": "P2y — any real number."
+            }
+          ]
         },
         "token": {
           "type": "string",
@@ -2831,7 +3109,8 @@
           "description": "Visual or interactive examples showing this easing in action: screen recordings, interactive curve visualizations, or CSS code snippets.",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         }
       },
       "additionalProperties": false
@@ -2866,7 +3145,7 @@
     },
     "principleEntry": {
       "type": "object",
-      "description": "A single guiding principle. Each principle has a short title and a description that explains what it means in practice and how it guides decisions. Principles are high-level. They set direction rather than prescribe specific actions. For specific, actionable rules, use a `guidelines` block instead. For whether to use an artifact at all, use `purpose`.",
+      "description": "A single guiding principle. Each principle has a short title and a description that explains what it means in practice and how it guides decisions. Principles are high-level. They set direction rather than prescribe specific actions. For specific, actionable rules, use a `guidelines` block instead. For whether to use an artifact at all, use a `useCases` block.",
       "required": [
         "title",
         "description"
@@ -3005,21 +3284,24 @@
           "description": "Illustrative examples for this section: code snippets, images, videos, or live URLs. Useful for showing a concept in practice within explanatory prose.",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         },
         "links": {
           "type": "array",
           "description": "Related links surfaced with this section: 'see also' references, source material, or pointers to other entities and external resources.",
           "items": {
             "$ref": "#/$defs/link"
-          }
+          },
+          "minItems": 1
         },
         "sections": {
           "type": "array",
           "description": "Nested sub-sections beneath this one. Each item is itself a sectionEntry, allowing an arbitrarily deep heading hierarchy. Ordering is significant, so tools SHOULD render sub-sections in this order.",
           "items": {
             "$ref": "#/$defs/sectionEntry"
-          }
+          },
+          "minItems": 1
         }
       },
       "additionalProperties": false
@@ -3069,11 +3351,8 @@
           "description": "What triggers this state, how appearance and behavior change, and any constraints or side effects."
         },
         "tokens": {
-          "type": "object",
-          "description": "Design token overrides applied when this state is active. Keys are token property names scoped to the component (e.g., 'button-background', 'button-border-color'). Values are token identifiers. They are required when the system has a token layer, so the override can't silently drift from the token source. Raw values are only for token-less systems. List only tokens that change from the default state. Note: these token references are descriptive summaries for designers. Authoritative resolved values for each variant × state combination live in the design-specifications guideline's overrides array.",
-          "additionalProperties": {
-            "type": "string"
-          }
+          "$ref": "#/$defs/tokenOverrides",
+          "description": "Design token overrides applied when this state is active, as the shared token-override map: keys are token-purpose names, values are documented token identifiers. List only tokens that change from the default state. Each state carries its own overrides here; on components, baseline (default-state) values live on the design-specifications block (patterns have no such block — their anatomy carries the baseline)."
         },
         "rationale": {
           "$ref": "#/$defs/richText",
@@ -3084,14 +3363,15 @@
           "description": "Examples showing the component in this state.",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         }
       },
       "additionalProperties": false
     },
     "states": {
       "type": "object",
-      "description": "Documents all interactive states of a component. Each item describes a single state: what triggers it, how appearance and behavior change, which tokens are overridden, and how it looks. List states in a meaningful order. A typical order is default first, then hover, focus, active, followed by disabled, loading, and other special states.",
+      "description": "Documents all interactive states of a component or pattern. Each item describes a single state: what triggers it, how appearance and behavior change, which tokens are overridden, and how it looks. List states in a meaningful order. A typical order is default first, then hover, focus, active, followed by disabled, loading, and other special states. Ownership rule: a state is a runtime condition entered through interaction or system events (hover, focus, disabled, loading); a configuration the consumer chooses up front is a variant — document it in the variants block, not here.",
       "required": [
         "kind",
         "items"
@@ -3133,7 +3413,8 @@
           "description": "Illustrative material for the step: a code snippet, a terminal command, a screenshot, or a live URL. Most procedural steps carry a single code example.",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         },
         "expectedResult": {
           "$ref": "#/$defs/richText",
@@ -3209,21 +3490,19 @@
           "description": "Examples showing this variant value in isolation or in context.",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         },
         "tokens": {
-          "type": "object",
-          "description": "Design token overrides applied when this value is selected. Keys are token-purpose names (e.g., 'background', 'text-color', 'padding-horizontal'). Values are token identifiers. In a system with a token layer these MUST be token identifiers, not raw values, so the value can't silently drift from the token source.",
-          "additionalProperties": {
-            "type": "string"
-          }
+          "$ref": "#/$defs/tokenOverrides",
+          "description": "Design token overrides applied when this value is selected, as the shared token-override map: keys are token-purpose names, values are documented token identifiers."
         }
       },
       "additionalProperties": false
     },
     "flagVariant": {
       "type": "object",
-      "description": "A boolean toggle variant that is either on or off. Use it for binary capabilities such as 'disabled', 'full-width', 'icon-only', or 'loading'. Flag variants have no values array. The component either has the flag active or not.",
+      "description": "A boolean toggle variant that is either on or off. Use it for binary capabilities such as 'full-width', 'full-width', 'icon-only', or 'icon-only'. Flag variants have no values array. The component either has the flag active or not.",
       "required": [
         "kind",
         "identifier",
@@ -3256,14 +3535,12 @@
           "description": "Examples showing the component with this flag active.",
           "items": {
             "$ref": "#/$defs/example"
-          }
+          },
+          "minItems": 1
         },
         "tokens": {
-          "type": "object",
-          "description": "Design token overrides applied when this flag is active. Keys are token-purpose names. Values are token identifiers. In a system with a token layer these MUST be token identifiers, not raw values, so the value can't silently drift from the token source.",
-          "additionalProperties": {
-            "type": "string"
-          }
+          "$ref": "#/$defs/tokenOverrides",
+          "description": "Design token overrides applied when this flag is active, as the shared token-override map: keys are token-purpose names, values are documented token identifiers."
         }
       },
       "additionalProperties": false
@@ -3308,7 +3585,7 @@
     },
     "variants": {
       "type": "object",
-      "description": "Documents all dimensions of visual or behavioral variation on a component. Each item is either a flag variant (a boolean toggle like 'disabled' or 'full-width') or an enum variant (a set of mutually exclusive options like size: sm | md | lg). Multiple items document orthogonal dimensions that combine independently.",
+      "description": "Documents all dimensions of visual or behavioral variation on a component or pattern. Each item is either a flag variant (a boolean toggle like 'disabled' or 'full-width') or an enum variant (a set of mutually exclusive options like size: sm | md | lg). Multiple items document orthogonal dimensions that combine independently. Ownership rule: a variant is a configuration the consumer chooses via the API or design surface (e.g., 'size', 'emphasis', 'full-width', 'icon-only'); a runtime condition entered through interaction or system events (hover, disabled, loading) is a state — document it in the states block, not here.",
       "required": [
         "kind",
         "items"
@@ -3323,12 +3600,49 @@
           "type": "array",
           "description": "The variant dimensions. Each item is either a flag (boolean toggle) or an enum (set of values). Ordering is significant, so tools SHOULD display dimensions in this order.",
           "items": {
-            "oneOf": [
+            "type": "object",
+            "description": "One variant dimension, discriminated by `kind`: 'flag' selects the flagVariant schema, 'enum' selects the enumVariant schema. Discriminated `if`/`then` branches (rather than a bare oneOf) keep validation errors scoped to the one schema the `kind` selects.",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "flag",
+                  "enum"
+                ]
+              }
+            },
+            "allOf": [
               {
-                "$ref": "#/$defs/flagVariant"
+                "if": {
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "flag"
+                    }
+                  }
+                },
+                "then": {
+                  "$ref": "#/$defs/flagVariant"
+                }
               },
               {
-                "$ref": "#/$defs/enumVariant"
+                "if": {
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "enum"
+                    }
+                  }
+                },
+                "then": {
+                  "$ref": "#/$defs/enumVariant"
+                }
               }
             ]
           },
@@ -3339,7 +3653,7 @@
     },
     "chunk": {
       "type": "object",
-      "description": "A pre-composed block of code that captures a design system pattern. Chunks give consumers a working starting point assembled from system components — for example, a layout, a settings form, or a confirmation dialog. The top level holds its identity (`identifier`, `name`, optional `description`), the `code` block that consumers copy, `guidelines` for how to use and adapt it, and `useCases` for when it is the right choice. Chunks are intentionally simple: they document a code composition, not the full anatomy/API surface a component carries.",
+      "description": "A pre-composed block of code that captures a design system pattern. Chunks give consumers a working starting point assembled from system components — for example, a layout, a settings form, or a confirmation dialog. The top level holds its identity (`identifier`, `name`, optional `description`), the `code` block that consumers copy, and `documentBlocks`/`agentDocumentBlocks` carrying the general block kinds (guidelines, useCases, accessibility, content, sections, checklist) — so a chunk can hold agent-only rules like any other entity. Chunks are intentionally simple: they document a code composition, not the full anatomy/API surface a component carries. The top-level `guidelines` and `useCases` arrays are DEPRECATED authoring shorthand — prefer the equivalent blocks in `documentBlocks`.",
       "required": [
         "kind",
         "identifier",
@@ -3399,7 +3713,9 @@
               "properties": {
                 "src": {
                   "type": "string",
-                  "description": "A relative path to the source file that holds the chunk's code (e.g., './chunks/confirmation-dialog.tsx'). MUST be relative. Absolute paths, protocol-relative references, and scheme-bearing URIs (http:, file:, …) are not permitted. Resolvers SHOULD gate any remote dereferencing behind an allow-list, following the same rules a `$ref` fileRef obeys. The file is read verbatim — no build step inlines it into the document."
+                  "pattern": "^(?![a-zA-Z][a-zA-Z0-9+.\\-]*:)(?!//)(?!/)",
+                  "description": "A relative path to the source file that holds the chunk's code (e.g., './chunks/confirmation-dialog.tsx'). MUST be relative — the pattern rejects absolute paths, protocol-relative references, and scheme-bearing URIs (http:, file:, …). Resolvers SHOULD gate any remote dereferencing behind an allow-list, following the same rules a `$ref` fileRef obeys. The file is read verbatim — no build step inlines it into the document.",
+                  "minLength": 1
                 },
                 "language": {
                   "type": "string",
@@ -3410,29 +3726,47 @@
             }
           ]
         },
+        "documentBlocks": {
+          "type": "array",
+          "description": "Structured docs for this chunk, as an ordered array of general document blocks (guidelines, useCases, accessibility, content, sections, checklist). Chunks accept the general kinds only — they document a code composition, not the anatomy/API surface a component carries.",
+          "items": {
+            "$ref": "#/$defs/generalDocumentBlock"
+          },
+          "minItems": 1
+        },
+        "agentDocumentBlocks": {
+          "type": "array",
+          "description": "Structured docs for AI agents consuming this chunk, using the same general block kinds as `documentBlocks`. Content here is agent-only: hard MUST/MUST-NOT rules, verification checklists, and adaptation constraints an agent needs when copying the chunk into an application. Human-facing guidance belongs in `documentBlocks`.",
+          "items": {
+            "$ref": "#/$defs/generalDocumentBlock"
+          },
+          "minItems": 1
+        },
         "guidelines": {
           "type": "array",
-          "description": "Actionable rules for using and adapting the chunk. Each item pairs a guidance statement with a rationale and an RFC 2119 enforcement level. Reuses the shared guideline-entry shape so chunk rules read the same as guidelines elsewhere in the system.",
+          "description": "DEPRECATED authoring shorthand — prefer a `guidelines` block inside `documentBlocks`. Actionable rules for using and adapting the chunk. Each item pairs a guidance statement with a rationale and an RFC 2119 enforcement level. Reuses the shared guideline-entry shape so chunk rules read the same as guidelines elsewhere in the system. When both this shorthand and an equivalent block in `documentBlocks` are present, tools MUST treat the `documentBlocks` block as authoritative.",
           "items": {
             "$ref": "#/$defs/guidelineEntry"
           },
-          "minItems": 1
+          "minItems": 1,
+          "deprecated": true
         },
         "useCases": {
           "type": "array",
-          "description": "Scenario-driven use cases describing when this chunk is — or is not — the right choice. Each entry is marked 'recommended' or 'discouraged'. Reuses the shared use-case shape. Authors SHOULD lead with recommended scenarios.",
+          "description": "DEPRECATED authoring shorthand — prefer a `useCases` block inside `documentBlocks`. Scenario-driven use cases describing when this chunk is — or is not — the right choice. Each entry is marked 'recommended' or 'discouraged'. Reuses the shared use-case shape. Authors SHOULD lead with recommended scenarios. When both this shorthand and an equivalent block in `documentBlocks` are present, tools MUST treat the `documentBlocks` block as authoritative.",
           "items": {
             "$ref": "#/$defs/useCase"
           },
-          "minItems": 1
+          "minItems": 1,
+          "deprecated": true
         },
         "relationships": {
           "$ref": "#/$defs/relationships",
-          "description": "Typed dependency edges from this chunk to other entities — chiefly 'composes' the components it is built from (mark `required` true for essential ones). The structural counterpart to listing components in `links`; the graph agents read for impact and alternatives. Inverse edges are derived by tooling."
+          "description": "Typed dependency edges from this chunk to other entities — chiefly 'composes' the components it is built from (mark `required` true for essential ones). This is the graph agents read for impact and alternatives. Inverse edges are derived by tooling."
         },
         "metadata": {
           "$ref": "#/$defs/entityMetadata",
-          "description": "Optional metadata fields, keyed by name: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links. Use the `links` field to point at the components this chunk composes."
+          "description": "Optional metadata: the shared entityMetadata fields (see metadata/metadata.schema.json). Declare the components this chunk composes as `relationships` edges, not links."
         },
         "$extensions": {
           "$ref": "#/$defs/extensions"
@@ -3442,7 +3776,7 @@
     },
     "component": {
       "type": "object",
-      "description": "A single reusable UI component. The top level holds its identity: `identifier`, `name`, and `description`. The `metadata` object holds optional fields: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links. The `documentBlocks` array holds structured docs as typed entries: imports, anatomy, api, variants, states, design-specifications, plus the general kinds.",
+      "description": "A single reusable UI component. The top level holds its identity: `identifier`, `name`, and `description`. The `metadata` object holds the shared entityMetadata fields (see metadata/metadata.schema.json). The `documentBlocks` array holds structured docs as typed entries: imports, anatomy, api, variants, states, design-specifications, plus the general kinds.",
       "required": [
         "kind",
         "identifier",
@@ -3469,7 +3803,7 @@
         },
         "metadata": {
           "$ref": "#/$defs/entityMetadata",
-          "description": "Optional metadata fields, keyed by name: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links."
+          "description": "Optional metadata: the shared entityMetadata fields (see metadata/metadata.schema.json)."
         },
         "relationships": {
           "$ref": "#/$defs/relationships",
@@ -3477,17 +3811,19 @@
         },
         "documentBlocks": {
           "type": "array",
-          "description": "All structured docs for this component, as an ordered array of typed document block objects. It accepts the component-specific kinds (imports, anatomy, api, variants, states, design-specifications) plus the general kinds (guidelines, useCases, accessibility, content, sections). The `kind` property on each entry sets its shape. Order matters, so tools SHOULD keep it for display.",
+          "description": "All structured docs for this component, as an ordered array of typed document block objects. It accepts the component-specific kinds (imports, anatomy, api, variants, states, design-specifications) plus the general kinds (guidelines, useCases, accessibility, content, sections, checklist). The `kind` property on each entry sets its shape. Order matters, so tools SHOULD keep it for display.",
           "items": {
             "$ref": "#/$defs/componentDocumentBlock"
-          }
+          },
+          "minItems": 1
         },
         "agentDocumentBlocks": {
           "type": "array",
-          "description": "Structured docs for agents (AI/LLM) only. This is a separate space that accepts the same document block kinds as `documentBlocks`. Use it for guidance that would be noise for human readers: generation limits, ways to tell confusable entities apart, and machine-checkable rules with evidence. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays — human-facing blocks first, then these.",
+          "description": "Structured docs for agents (AI/LLM) only — a separate space that accepts the same block kinds as `documentBlocks`. `documentBlocks` is the default: put anything a human reader needs there. Use `agentDocumentBlocks` only for content that helps an agent build correctly but is noise for humans. For example: hard MUST/MUST-NOT rules an agent should treat as firm limits; notes that correct a mistake an agent is likely to make, such as reaching for this entity when a confusable one fits better; constraints backed by test-run evidence; and machine-checkable criteria with verification modes. A hard rule that humans also need (such as an accessibility requirement) belongs in `documentBlocks`, not here. Agent blocks add to the human docs — they never replace or duplicate them. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays, human blocks first.",
           "items": {
             "$ref": "#/$defs/componentDocumentBlock"
-          }
+          },
+          "minItems": 1
         },
         "$extensions": {
           "$ref": "#/$defs/extensions"
@@ -3497,7 +3833,7 @@
     },
     "foundation": {
       "type": "object",
-      "description": "The principles, guidelines, scales, and token references that govern a broad design domain across the system, such as color, typography, spacing, elevation, motion, accessibility, and content. Foundations are wider than a single visual attribute. A domain may be visual (color, spacing) or cross-cutting (accessibility, content). The top level holds its identity: `identifier`, `name`, and `description`. The `metadata` object holds optional fields: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links. The `documentBlocks` array holds structured docs as typed entries: principles, scale, motion, guidelines, accessibility, content, and so on.",
+      "description": "The principles, guidelines, scales, and token references that govern a broad design domain across the system, such as color, typography, spacing, elevation, motion, accessibility, and content. Foundations are wider than a single visual attribute. A domain may be visual (color, spacing) or cross-cutting (accessibility, content). The top level holds its identity: `identifier`, `name`, and `description`. The `metadata` object holds the shared entityMetadata fields (see metadata/metadata.schema.json). The `documentBlocks` array holds structured docs as typed entries: principles, scale, motion, guidelines, accessibility, content, and so on.",
       "required": [
         "kind",
         "identifier",
@@ -3524,7 +3860,7 @@
         },
         "metadata": {
           "$ref": "#/$defs/entityMetadata",
-          "description": "Optional metadata fields, keyed by name: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links."
+          "description": "Optional metadata: the shared entityMetadata fields (see metadata/metadata.schema.json)."
         },
         "relationships": {
           "$ref": "#/$defs/relationships",
@@ -3532,17 +3868,19 @@
         },
         "documentBlocks": {
           "type": "array",
-          "description": "All structured docs for this foundation, as an ordered array of typed document block objects. It accepts the foundation-specific kinds (principles, scale, motion) plus the general kinds (guidelines, useCases, accessibility, content, sections). The `kind` property on each entry sets its shape. Order matters, so tools SHOULD keep it for display. Put internal artifact links (such as token group references) in the `links` metadata field, not in document block entries.",
+          "description": "All structured docs for this foundation, as an ordered array of typed document block objects. It accepts the foundation-specific kinds (principles, scale, motion) plus the general kinds (guidelines, useCases, accessibility, content, sections, checklist). The `kind` property on each entry sets its shape. Order matters, so tools SHOULD keep it for display. Put internal artifact links (such as token group references) in the `links` metadata field, not in document block entries.",
           "items": {
             "$ref": "#/$defs/foundationDocumentBlock"
-          }
+          },
+          "minItems": 1
         },
         "agentDocumentBlocks": {
           "type": "array",
-          "description": "Structured docs for agents (AI/LLM) only. This is a separate space that accepts the same document block kinds as `documentBlocks`. Use it for guidance that would be noise for human readers: generation limits, ways to tell confusable entities apart, and machine-checkable rules with evidence. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays — human-facing blocks first, then these.",
+          "description": "Structured docs for agents (AI/LLM) only — a separate space that accepts the same block kinds as `documentBlocks`. `documentBlocks` is the default: put anything a human reader needs there. Use `agentDocumentBlocks` only for content that helps an agent build correctly but is noise for humans. For example: hard MUST/MUST-NOT rules an agent should treat as firm limits; notes that correct a mistake an agent is likely to make, such as reaching for this entity when a confusable one fits better; constraints backed by test-run evidence; and machine-checkable criteria with verification modes. A hard rule that humans also need (such as an accessibility requirement) belongs in `documentBlocks`, not here. Agent blocks add to the human docs — they never replace or duplicate them. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays, human blocks first.",
           "items": {
             "$ref": "#/$defs/foundationDocumentBlock"
-          }
+          },
+          "minItems": 1
         },
         "$extensions": {
           "$ref": "#/$defs/extensions"
@@ -3579,7 +3917,7 @@
         },
         "metadata": {
           "$ref": "#/$defs/entityMetadata",
-          "description": "Optional metadata fields, keyed by name: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links. Use `category` to classify the guide (e.g., 'getting-started', 'contribution', 'tutorial', 'concept', 'migration')."
+          "description": "Optional metadata: the shared entityMetadata fields (see metadata/metadata.schema.json). Use `category` to classify the guide (e.g., 'getting-started', 'contribution', 'tutorial', 'concept', 'migration')."
         },
         "relationships": {
           "$ref": "#/$defs/relationships",
@@ -3587,17 +3925,19 @@
         },
         "documentBlocks": {
           "type": "array",
-          "description": "All structured docs for this guide, as an ordered array of typed document block objects. It accepts the guide-specific kinds (sections, steps) plus reused kinds (imports for setup instructions, guidelines, useCases, accessibility, content). The `kind` property on each entry sets its shape. A guide reads top to bottom, so order matters and tools SHOULD keep it for display. Put links to other entities and external resources in the `links` metadata field or a section's `links`, not in document block entries.",
+          "description": "All structured docs for this guide, as an ordered array of typed document block objects. It accepts the guide-specific kind (steps), the reused imports kind (setup instructions), plus the general kinds (guidelines, useCases, accessibility, content, sections, checklist). The free-form sections block is a guide's backbone. The `kind` property on each entry sets its shape. A guide reads top to bottom, so order matters and tools SHOULD keep it for display. Put links to other entities and external resources in the `links` metadata field or a section's `links`, not in document block entries.",
           "items": {
             "$ref": "#/$defs/guideDocumentBlock"
-          }
+          },
+          "minItems": 1
         },
         "agentDocumentBlocks": {
           "type": "array",
-          "description": "Structured docs for agents (AI/LLM) only. This is a separate space that accepts the same document block kinds as `documentBlocks`. Use it for guidance that would be noise for human readers: generation limits, ways to tell confusable entities apart, and machine-checkable rules with evidence. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays — human-facing blocks first, then these.",
+          "description": "Structured docs for agents (AI/LLM) only — a separate space that accepts the same block kinds as `documentBlocks`. `documentBlocks` is the default: put anything a human reader needs there. Use `agentDocumentBlocks` only for content that helps an agent build correctly but is noise for humans. For example: hard MUST/MUST-NOT rules an agent should treat as firm limits; notes that correct a mistake an agent is likely to make, such as reaching for this entity when a confusable one fits better; constraints backed by test-run evidence; and machine-checkable criteria with verification modes. A hard rule that humans also need (such as an accessibility requirement) belongs in `documentBlocks`, not here. Agent blocks add to the human docs — they never replace or duplicate them. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays, human blocks first.",
           "items": {
             "$ref": "#/$defs/guideDocumentBlock"
-          }
+          },
+          "minItems": 1
         },
         "$extensions": {
           "$ref": "#/$defs/extensions"
@@ -3607,7 +3947,7 @@
     },
     "pattern": {
       "type": "object",
-      "description": "A repeated, multi-component solution to a common UX problem. Patterns sit above individual components. They show how those components combine to meet a user need. The top level holds its identity: `identifier`, `name`, and `description`. The `metadata` object holds optional fields: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links. The `documentBlock` array holds structured docs as typed entries: `interactions` for flow steps, `guidelines` for rules, `accessibility` for a11y specs, and so on.",
+      "description": "A repeated, multi-component solution to a common UX problem. Patterns sit above individual components. They show how those components combine to meet a user need. The top level holds its identity: `identifier`, `name`, and `description`. The `metadata` object holds the shared entityMetadata fields (see metadata/metadata.schema.json). The `documentBlock` array holds structured docs as typed entries: `interactions` for flow steps, `guidelines` for rules, `accessibility` for a11y specs, and so on.",
       "required": [
         "kind",
         "identifier",
@@ -3634,7 +3974,7 @@
         },
         "metadata": {
           "$ref": "#/$defs/entityMetadata",
-          "description": "Optional metadata fields, keyed by name: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links."
+          "description": "Optional metadata: the shared entityMetadata fields (see metadata/metadata.schema.json)."
         },
         "relationships": {
           "$ref": "#/$defs/relationships",
@@ -3642,17 +3982,19 @@
         },
         "documentBlocks": {
           "type": "array",
-          "description": "All structured docs for this pattern, as an ordered array of typed document block objects. Patterns accept the pattern-specific kinds (interactions) plus the general kinds (guidelines, useCases, accessibility, content, sections). The `kind` property on each entry sets its shape. Order matters, so tools SHOULD keep it for display. Interaction entries rely on order to show the flow over time. List the components a pattern uses in the `links` metadata field (kind 'component', name, and role), not in a dedicated block kind.",
+          "description": "All structured docs for this pattern, as an ordered array of typed document block objects. Patterns accept the pattern-specific kind (interactions), the shared structural kinds (anatomy, variants, states), plus the general kinds (guidelines, useCases, accessibility, content, sections, checklist). The `kind` property on each entry sets its shape. Order matters, so tools SHOULD keep it for display. Interaction entries rely on order to show the flow over time. Declare the components a pattern uses as typed `composes` edges in the entity's `relationships` array (with `role` describing what each component does), not in a dedicated block kind.",
           "items": {
             "$ref": "#/$defs/patternDocumentBlock"
-          }
+          },
+          "minItems": 1
         },
         "agentDocumentBlocks": {
           "type": "array",
-          "description": "Structured docs for agents (AI/LLM) only. This is a separate space that accepts the same document block kinds as `documentBlocks`. Use it for guidance that would be noise for human readers: generation limits, ways to tell confusable entities apart, and machine-checkable rules with evidence. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays — human-facing blocks first, then these.",
+          "description": "Structured docs for agents (AI/LLM) only — a separate space that accepts the same block kinds as `documentBlocks`. `documentBlocks` is the default: put anything a human reader needs there. Use `agentDocumentBlocks` only for content that helps an agent build correctly but is noise for humans. For example: hard MUST/MUST-NOT rules an agent should treat as firm limits; notes that correct a mistake an agent is likely to make, such as reaching for this entity when a confusable one fits better; constraints backed by test-run evidence; and machine-checkable criteria with verification modes. A hard rule that humans also need (such as an accessibility requirement) belongs in `documentBlocks`, not here. Agent blocks add to the human docs — they never replace or duplicate them. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays, human blocks first.",
           "items": {
             "$ref": "#/$defs/patternDocumentBlock"
-          }
+          },
+          "minItems": 1
         },
         "$extensions": {
           "$ref": "#/$defs/extensions"
@@ -3680,7 +4022,7 @@
     },
     "theme": {
       "type": "object",
-      "description": "A named context that adapts the design system's token values. DSDS captures the purpose, usage document blocks, accessibility notes, and the list of affected tokens. The override values live in the DTCG file that `source` points to. Use themes for color modes (light, dark, high-contrast), density settings (compact, comfortable), brand variants, or product-specific tweaks. The token catalog stays the source of truth for token identity, type, and docs. The `metadata` object holds optional fields: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links.",
+      "description": "A named context that adapts the design system's token values. DSDS captures the purpose, usage document blocks, accessibility notes, and the list of affected tokens. The override values live in the DTCG file that `source` points to. Use themes for color modes (light, dark, high-contrast), density settings (compact, comfortable), brand variants, or product-specific tweaks. The token catalog stays the source of truth for token identity, type, and docs. The `metadata` object holds the shared entityMetadata fields (see metadata/metadata.schema.json).",
       "required": [
         "kind",
         "identifier",
@@ -3707,11 +4049,14 @@
         },
         "metadata": {
           "$ref": "#/$defs/entityMetadata",
-          "description": "Optional metadata fields, keyed by name: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links."
+          "description": "Optional metadata: the shared entityMetadata fields (see metadata/metadata.schema.json)."
         },
         "source": {
           "type": "object",
           "description": "Points to the W3C Design Tokens (DTCG) definition. DSDS does not copy token values. The DTCG file is the source of truth for resolved values, aliases, and type info.",
+          "required": [
+            "file"
+          ],
           "properties": {
             "file": {
               "type": "string",
@@ -3738,17 +4083,19 @@
         },
         "documentBlocks": {
           "type": "array",
-          "description": "All structured docs for this theme, as an ordered array of typed document block objects. Themes accept the general kinds only (guidelines, useCases, accessibility, content, sections). The `kind` property on each entry sets its shape. Order matters, so tools SHOULD keep it for display.",
+          "description": "All structured docs for this theme, as an ordered array of typed document block objects. Themes accept the general kinds only (guidelines, useCases, accessibility, content, sections, checklist). The `kind` property on each entry sets its shape. Order matters, so tools SHOULD keep it for display.",
           "items": {
-            "$ref": "#/$defs/tokenDocumentBlock"
-          }
+            "$ref": "#/$defs/generalDocumentBlock"
+          },
+          "minItems": 1
         },
         "agentDocumentBlocks": {
           "type": "array",
-          "description": "Structured docs for agents (AI/LLM) only. This is a separate space that accepts the same document block kinds as `documentBlocks`. Use it for guidance that would be noise for human readers: generation limits, ways to tell confusable entities apart, and machine-checkable rules with evidence. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays — human-facing blocks first, then these.",
+          "description": "Structured docs for agents (AI/LLM) only — a separate space that accepts the same block kinds as `documentBlocks`. `documentBlocks` is the default: put anything a human reader needs there. Use `agentDocumentBlocks` only for content that helps an agent build correctly but is noise for humans. For example: hard MUST/MUST-NOT rules an agent should treat as firm limits; notes that correct a mistake an agent is likely to make, such as reaching for this entity when a confusable one fits better; constraints backed by test-run evidence; and machine-checkable criteria with verification modes. A hard rule that humans also need (such as an accessibility requirement) belongs in `documentBlocks`, not here. Agent blocks add to the human docs — they never replace or duplicate them. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays, human blocks first.",
           "items": {
-            "$ref": "#/$defs/tokenDocumentBlock"
-          }
+            "$ref": "#/$defs/generalDocumentBlock"
+          },
+          "minItems": 1
         },
         "$extensions": {
           "$ref": "#/$defs/extensions"
@@ -3758,11 +4105,10 @@
     },
     "token": {
       "type": "object",
-      "description": "Docs for a single design token: identifier, type, use cases, guidelines, and accessibility notes. The display `name` property is absent. The `identifier` itself serves as the display label. Description and status are optional. The `metadata` object holds optional fields: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links. When a token sits inside a token group and omits its own status field, the parent group's status applies.",
+      "description": "Docs for a single design token: identifier, type, use cases, guidelines, and accessibility notes. The display `name` property is absent. The `identifier` itself serves as the display label. Description and status are optional. The `metadata` object holds the shared entityMetadata fields (see metadata/metadata.schema.json). When a token sits inside a token group and omits its own status field, the parent group's status applies.",
       "required": [
         "kind",
-        "identifier",
-        "tokenType"
+        "identifier"
       ],
       "properties": {
         "kind": {
@@ -3780,7 +4126,7 @@
         },
         "tokenType": {
           "type": "string",
-          "description": "The type of token aligned with the DTCG spec (e.g., 'color', 'dimension', 'fontFamily', 'fontWeight', 'duration', 'cubicBezier', 'shadow')."
+          "description": "The type of token aligned with the DTCG spec (e.g., 'color', 'dimension', 'fontFamily', 'fontWeight', 'duration', 'cubicBezier', 'shadow'). MUST be present unless an ancestor token group declares `tokenType` — children inherit the group's value when they omit their own. Validators enforce the own-or-inherited rule; a token with no `tokenType` anywhere in its ancestry is a defect."
         },
         "description": {
           "$ref": "#/$defs/richText",
@@ -3789,6 +4135,9 @@
         "source": {
           "type": "object",
           "description": "Points to the W3C Design Tokens (DTCG) definition. DSDS does not copy token values. The DTCG file is the source of truth for resolved values, aliases, and type info.",
+          "required": [
+            "file"
+          ],
           "properties": {
             "file": {
               "type": "string",
@@ -3803,7 +4152,7 @@
         },
         "metadata": {
           "$ref": "#/$defs/entityMetadata",
-          "description": "Optional metadata fields, keyed by name: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links."
+          "description": "Optional metadata: the shared entityMetadata fields (see metadata/metadata.schema.json)."
         },
         "relationships": {
           "$ref": "#/$defs/relationships",
@@ -3811,17 +4160,19 @@
         },
         "documentBlocks": {
           "type": "array",
-          "description": "All structured docs for this token, as an ordered array of typed document block objects. Tokens accept the general kinds only (guidelines, useCases, accessibility, content, sections). The `kind` property on each entry sets its shape. Order matters, so tools SHOULD keep it for display.",
+          "description": "All structured docs for this token, as an ordered array of typed document block objects. Tokens accept the general kinds only (guidelines, useCases, accessibility, content, sections, checklist). The `kind` property on each entry sets its shape. Order matters, so tools SHOULD keep it for display.",
           "items": {
-            "$ref": "#/$defs/tokenDocumentBlock"
-          }
+            "$ref": "#/$defs/generalDocumentBlock"
+          },
+          "minItems": 1
         },
         "agentDocumentBlocks": {
           "type": "array",
-          "description": "Structured docs for agents (AI/LLM) only. This is a separate space that accepts the same document block kinds as `documentBlocks`. Use it for guidance that would be noise for human readers: generation limits, ways to tell confusable entities apart, and machine-checkable rules with evidence. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays — human-facing blocks first, then these.",
+          "description": "Structured docs for agents (AI/LLM) only — a separate space that accepts the same block kinds as `documentBlocks`. `documentBlocks` is the default: put anything a human reader needs there. Use `agentDocumentBlocks` only for content that helps an agent build correctly but is noise for humans. For example: hard MUST/MUST-NOT rules an agent should treat as firm limits; notes that correct a mistake an agent is likely to make, such as reaching for this entity when a confusable one fits better; constraints backed by test-run evidence; and machine-checkable criteria with verification modes. A hard rule that humans also need (such as an accessibility requirement) belongs in `documentBlocks`, not here. Agent blocks add to the human docs — they never replace or duplicate them. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays, human blocks first.",
           "items": {
-            "$ref": "#/$defs/tokenDocumentBlock"
-          }
+            "$ref": "#/$defs/generalDocumentBlock"
+          },
+          "minItems": 1
         },
         "$extensions": {
           "$ref": "#/$defs/extensions"
@@ -3831,7 +4182,7 @@
     },
     "tokenGroup": {
       "type": "object",
-      "description": "A group of related design tokens. Token groups are flexible units: a full collection, a family (e.g., all color tokens), a sub-family (e.g., a single hue with its grade scale), or any other logical grouping. Groups can nest to form a deep hierarchy. A top-level group might stand for 'color' and hold child groups for 'color-text', 'color-background', and 'color-border', each with its own tokens. This nesting mirrors how real design systems organize tokens into families and sub-families. The display `name` property is absent. The `identifier` itself serves as the display label. Description and status are optional. The `metadata` object holds optional fields: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, and links. When a child omits its own status field, the parent group's status applies.",
+      "description": "A group of related design tokens. Token groups are flexible units: a full collection, a family (e.g., all color tokens), a sub-family (e.g., a single hue with its grade scale), or any other logical grouping. Groups can nest to form a deep hierarchy. A top-level group might stand for 'color' and hold child groups for 'color-text', 'color-background', and 'color-border', each with its own tokens. This nesting mirrors how real design systems organize tokens into families and sub-families. The display `name` property is absent. The `identifier` itself serves as the display label. Description and status are optional. The `metadata` object holds the shared entityMetadata fields (see metadata/metadata.schema.json). When a child omits its own status field, the parent group's status applies.",
       "required": [
         "kind",
         "identifier"
@@ -3861,6 +4212,9 @@
         "source": {
           "type": "object",
           "description": "Points to the W3C Design Tokens (DTCG) definition. DSDS does not copy token values. The DTCG file is the source of truth for resolved values, aliases, and type info.",
+          "required": [
+            "file"
+          ],
           "properties": {
             "file": {
               "type": "string",
@@ -3890,7 +4244,7 @@
         },
         "metadata": {
           "$ref": "#/$defs/entityMetadata",
-          "description": "Optional metadata fields, keyed by name: status, since, lastUpdated, category, tags, aliases, summary, thumbnail, preview, extends, and links."
+          "description": "Optional metadata: the shared entityMetadata fields (see metadata/metadata.schema.json)."
         },
         "relationships": {
           "$ref": "#/$defs/relationships",
@@ -3898,17 +4252,19 @@
         },
         "documentBlocks": {
           "type": "array",
-          "description": "All structured docs for this token group, as an ordered array of typed document block objects. It accepts the general kinds only (guidelines, useCases, accessibility, content, sections). Use this array for docs that apply to the group as a whole. Put docs for individual tokens on the token inside `children`.",
+          "description": "All structured docs for this token group, as an ordered array of typed document block objects. It accepts the general kinds only (guidelines, useCases, accessibility, content, sections, checklist). Use this array for docs that apply to the group as a whole. Put docs for individual tokens on the token inside `children`.",
           "items": {
-            "$ref": "#/$defs/tokenDocumentBlock"
-          }
+            "$ref": "#/$defs/generalDocumentBlock"
+          },
+          "minItems": 1
         },
         "agentDocumentBlocks": {
           "type": "array",
-          "description": "Structured docs for agents (AI/LLM) only. This is a separate space that accepts the same document block kinds as `documentBlocks`. Use it for guidance that would be noise for human readers: generation limits, ways to tell confusable entities apart, and machine-checkable rules with evidence. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays — human-facing blocks first, then these.",
+          "description": "Structured docs for agents (AI/LLM) only — a separate space that accepts the same block kinds as `documentBlocks`. `documentBlocks` is the default: put anything a human reader needs there. Use `agentDocumentBlocks` only for content that helps an agent build correctly but is noise for humans. For example: hard MUST/MUST-NOT rules an agent should treat as firm limits; notes that correct a mistake an agent is likely to make, such as reaching for this entity when a confusable one fits better; constraints backed by test-run evidence; and machine-checkable criteria with verification modes. A hard rule that humans also need (such as an accessibility requirement) belongs in `documentBlocks`, not here. Agent blocks add to the human docs — they never replace or duplicate them. Tools MUST NOT render these blocks in human-facing docs. Agents SHOULD read both arrays, human blocks first.",
           "items": {
-            "$ref": "#/$defs/tokenDocumentBlock"
-          }
+            "$ref": "#/$defs/generalDocumentBlock"
+          },
+          "minItems": 1
         },
         "$extensions": {
           "$ref": "#/$defs/extensions"
@@ -3917,31 +4273,145 @@
       "additionalProperties": false
     },
     "anyEntity": {
-      "description": "Any DSDS entity — component, token, token group, theme, foundation, pattern, guide, or chunk. The required `kind` property identifies the entity type and selects its schema. This is the single entity union. The root `entity` property and each entity group's `entities` array both accept it.",
-      "oneOf": [
+      "type": "object",
+      "description": "Any DSDS entity — component, token, token group, theme, foundation, pattern, guide, or chunk. The required `kind` property identifies the entity type and selects its schema via one `if`/`then` branch per kind — the same discriminated-union style the document-block unions use, so a validation error reports against the one schema the `kind` selects instead of compounding across all eight. This is the single entity union. The root `entity` property and each entity group's `entities` array both accept it.",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "component",
+            "pattern",
+            "foundation",
+            "theme",
+            "token",
+            "token-group",
+            "guide",
+            "chunk"
+          ]
+        }
+      },
+      "allOf": [
         {
-          "$ref": "#/$defs/component"
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "component"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/component"
+          }
         },
         {
-          "$ref": "#/$defs/pattern"
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "pattern"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/pattern"
+          }
         },
         {
-          "$ref": "#/$defs/foundation"
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "foundation"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/foundation"
+          }
         },
         {
-          "$ref": "#/$defs/theme"
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "theme"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/theme"
+          }
         },
         {
-          "$ref": "#/$defs/token"
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "token"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/token"
+          }
         },
         {
-          "$ref": "#/$defs/tokenGroup"
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "token-group"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/tokenGroup"
+          }
         },
         {
-          "$ref": "#/$defs/guide"
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "guide"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/guide"
+          }
         },
         {
-          "$ref": "#/$defs/chunk"
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "chunk"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/chunk"
+          }
         }
       ]
     },
@@ -3954,21 +4424,25 @@
       "properties": {
         "$ref": {
           "type": "string",
-          "description": "A relative reference to a DSDS file, optionally with a JSON Pointer fragment that identifies the target value within that file (e.g., './button.dsds.json#/entity'). MUST be relative. Absolute paths, protocol-relative references, and scheme-bearing URIs (http:, file:, …) are not permitted. A reference to another system uses `extends.url`. Resolvers MUST detect cycles. They MUST treat unresolvable files or pointers and shape mismatches as fatal. They MUST gate any remote dereferencing behind an allow-list (see the spec's reference-resolution and security rules)."
+          "pattern": "^(?![a-zA-Z][a-zA-Z0-9+.\\-]*:)(?!//)(?!/)",
+          "description": "A relative reference to a DSDS file, optionally with a JSON Pointer fragment that identifies the target value within that file (e.g., './button.dsds.json#/entity'). MUST be relative — the pattern rejects absolute paths, protocol-relative references, and scheme-bearing URIs (http:, file:, …). A reference to another system uses `extends.url`. Resolvers MUST detect cycles. They MUST treat unresolvable files or pointers and shape mismatches as fatal. They MUST gate any remote dereferencing behind an allow-list (see the spec's reference-resolution and security rules).",
+          "minLength": 1
         }
       },
       "additionalProperties": false
     },
     "entityGroup": {
       "type": "object",
-      "description": "A named collection of design system entities. All entities live in a single `entities` array, in display order, mixing entity types freely. Each entity's required `kind` identifies its type, so no per-type arrays are needed. Only the group name is required.",
+      "description": "A named collection of design system entities. All entities live in a single `entities` array, in display order, mixing entity types freely. Each entity's required `kind` identifies its type, so no per-type arrays are needed. A group MUST hold at least one entity — an empty group has nothing to document.",
       "required": [
-        "name"
+        "name",
+        "entities"
       ],
       "properties": {
         "name": {
           "type": "string",
-          "description": "Human-readable name of the collection (e.g., 'Acme Design System', 'Color Tokens', 'Button Documentation'). This is already a display label — it does NOT have an `identifier` counterpart and need not match a slug pattern."
+          "description": "Human-readable name of the collection (e.g., 'Acme Design System', 'Color Tokens', 'Button Documentation'). This is already a display label — it does NOT have an `identifier` counterpart and need not match a slug pattern.",
+          "minLength": 1
         },
         "description": {
           "$ref": "#/$defs/richText"

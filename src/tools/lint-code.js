@@ -89,46 +89,76 @@ function inferLanguage(filename) {
   return 'js';
 }
 
-export const lintCodeDef = {
-  name: 'dsds_lint_code',
+export const lintByPathDef = {
+  name: 'dsds_lint_by_path',
   description:
-    'Lint code against the configured ESLint plugins. ' +
-    'Auto-applies all fixable violations and returns the corrected code — copy the corrected code directly into your files. ' +
-    'Returns remaining violations that require manual edits alongside the corrected code. ' +
-    'Use the `files` array to lint ALL generated files in one call — this is the preferred usage. ' +
-    'TOKEN-SAVING — read carefully: ' +
-    '(1) ONE PASS. A clean or auto-fixed result is FINAL — after applying the corrected code, do NOT call this tool ' +
-    'again just to confirm. Re-linting unchanged code only re-sends tokens you already have. ' +
-    '(2) CHANGED FILES ONLY. On any later call, send only the files you actually changed since the last call; for ' +
-    'files that have not changed, pass `cacheKey` (from a previous result) or `path` instead of re-sending `code`. ' +
-    '(3) LINT BY PATH. If a file is already written to disk, pass `path` (relative to the lint project root) instead ' +
-    'of `code` so you do not have to re-emit its contents at all. ' +
+    'Lint one or more files ALREADY WRITTEN TO DISK, given their paths. Reads each file from disk, ' +
+    'auto-applies fixable violations, and returns the corrected code plus any remaining violations. ' +
+    'Does NOT save, create, or modify files — it only reads them (the `apply` flag, for harness use, is the sole exception). ' +
+    'If a path does not exist it returns an error and tells you to persist the file first — it never creates the file for you. ' +
+    'Prefer this over dsds_lint_inline: pass paths, not source, so you never re-send file contents. ' +
+    'Use the `files` array to lint every file in one call. ' +
+    'ONE PASS: a clean or auto-fixed result is FINAL — do not re-lint unchanged files to "confirm". ' +
     'Code produced by dsds_build_component is already design-system-valid — do not lint it. ' +
-    'IMPORTANT: Only lint complete implementations. Design-system rules fire on JSX elements — ' +
-    'stub files that return null or contain no JSX will produce no design-system violations, ' +
-    'giving a false all-clear. Always call this tool after writing your final component code.',
+    'Design-system rules fire on JSX; linting a stub with no JSX gives a false all-clear, so lint your finished component code.',
   inputSchema: {
     type: 'object',
     properties: {
       files: {
         type: 'array',
-        description:
-          'Batch mode: lint multiple files at once. Pass every file you generated. ' +
-          'Each entry needs either `code` (full source) or `cacheKey` (from a previous call). ' +
-          'Pass `cacheKey` instead of `code` for files that have not changed since the last lint call.',
+        description: 'Lint multiple on-disk files at once. Pass every file you wrote.',
         items: {
           type: 'object',
           properties: {
-            code:     { type: 'string', description: 'Source code to lint. Required unless `cacheKey` or `path` is provided.' },
+            path:     { type: 'string', description: 'Path to a file on disk, relative to the lint project root.' },
+            filename: { type: 'string', description: "Optional filename override for parser inference (e.g. 'App.tsx'). Defaults to the path." },
+          },
+          required: ['path'],
+        },
+      },
+      path: {
+        type: 'string',
+        description: 'Single-file mode: path to a file on disk, relative to the lint project root.',
+      },
+      filename: {
+        type: 'string',
+        description: 'Single-file mode: optional filename override for parser inference. Defaults to the path.',
+      },
+      apply: {
+        type: 'boolean',
+        description: 'Harness/automation only: write auto-fixed code back to disk (lint as a non-skippable gate). Agents copy the corrected code from the response instead.',
+      },
+    },
+  },
+};
+
+export const lintInlineDef = {
+  name: 'dsds_lint_inline',
+  description:
+    'Lint a source STRING in memory (read-only). Returns lint findings and auto-fixed code for you to copy into your files. ' +
+    'Does NOT save, create, or modify any file — nothing is written to disk and nothing is persisted. It only checks the text you pass; ' +
+    'the response reports how many characters were checked and confirms no file was touched. ' +
+    'For a file that is already on disk, use dsds_lint_by_path instead (pass the path, not the source). ' +
+    'Code produced by dsds_build_component is already design-system-valid — do not lint it. ' +
+    'Design-system rules fire on JSX; linting a stub with no JSX gives a false all-clear, so lint your finished component code.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      files: {
+        type: 'array',
+        description: 'Lint multiple source strings at once.',
+        items: {
+          type: 'object',
+          properties: {
+            code:     { type: 'string', description: 'Source code to lint. Required unless `cacheKey` is provided.' },
             filename: { type: 'string', description: "Filename for parser inference (e.g. 'App.tsx')." },
-            cacheKey: { type: 'string', description: 'Cache key from a previous dsds_lint_code call. Pass this instead of `code` to skip re-sending unchanged file content.' },
-            path:     { type: 'string', description: 'Path to a file already written to disk, relative to the lint project root. Pass this instead of `code` to lint without re-sending the file contents.' },
+            cacheKey: { type: 'string', description: 'Cache key from a previous dsds_lint_inline result. Pass instead of `code` to skip re-sending unchanged content.' },
           },
         },
       },
       code: {
         type: 'string',
-        description: 'Single-file mode: source code to lint. Use `files` instead when you have multiple files.',
+        description: 'Single-file mode: source code to lint. Use `files` when you have multiple.',
       },
       filename: {
         type: 'string',
@@ -136,15 +166,7 @@ export const lintCodeDef = {
       },
       cacheKey: {
         type: 'string',
-        description: 'Single-file mode: cache key from a previous call. Pass this instead of `code` to skip re-sending unchanged file content.',
-      },
-      path: {
-        type: 'string',
-        description: 'Single-file mode: path to a file already on disk (relative to the lint project root). Pass this instead of `code` to avoid re-sending its contents.',
-      },
-      apply: {
-        type: 'boolean',
-        description: 'Write auto-fixed code back to disk for files passed by `path`. For harness/automation use (lint as a non-skippable gate); agents copy the corrected code from the response instead.',
+        description: 'Single-file mode: cache key from a previous call. Pass instead of `code` to skip re-sending unchanged content.',
       },
     },
   },
@@ -173,21 +195,50 @@ async function writeLintLog(logsDir, fileResults) {
   });
 }
 
-export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
-  // Normalise input: batch `files` array takes priority over single code/cacheKey.
+/**
+ * dsds_lint_by_path — lint files already written to disk, by path. Reads each
+ * file; a missing path returns corrective coaching (this tool does not create files).
+ */
+export async function lintByPathHandler(args, getLintConfig, logsDir = null) {
   const filesToLint = args.files?.length
-    ? args.files
-    : args.code != null || args.cacheKey != null || args.path != null
-      ? [{ code: args.code, filename: args.filename, cacheKey: args.cacheKey, path: args.path }]
+    ? args.files.map(f => ({ path: f.path, filename: f.filename }))
+    : args.path != null
+      ? [{ path: args.path, filename: args.filename }]
       : null;
 
   if (!filesToLint) {
     return {
       isError: true,
-      content: [{ type: 'text', text: 'Provide either `files` (array), `code` (string), `path` (file on disk), or `cacheKey` (from a previous call).' }],
+      content: [{ type: 'text', text: 'Provide `path` (a file on disk) or `files: [{ path }]`. This tool lints files by path — to lint a source string without a file, use `dsds_lint_inline`.' }],
     };
   }
+  return runLint(filesToLint, getLintConfig, { logsDir, apply: !!args.apply, mode: 'path' });
+}
 
+/**
+ * dsds_lint_inline — lint a source string in memory. Read-only: nothing is read
+ * from or written to disk. No `path` argument, so there is no illusion of persistence.
+ */
+export async function lintInlineHandler(args, getLintConfig, logsDir = null) {
+  const filesToLint = args.files?.length
+    ? args.files.map(f => ({ code: f.code, filename: f.filename, cacheKey: f.cacheKey }))
+    : args.code != null || args.cacheKey != null
+      ? [{ code: args.code, filename: args.filename, cacheKey: args.cacheKey }]
+      : null;
+
+  if (!filesToLint) {
+    return {
+      isError: true,
+      content: [{ type: 'text', text: 'Provide `code` (a source string) or `files: [{ code }]`. This tool checks a string in memory — to lint a file already on disk, use `dsds_lint_by_path`.' }],
+    };
+  }
+  return runLint(filesToLint, getLintConfig, { logsDir, apply: false, mode: 'inline' });
+}
+
+// Shared linter. `mode` is 'path' (entries have `path`) or 'inline' (entries
+// have `code`/`cacheKey`); it only affects framing (the inline "no file touched"
+// note and the missing-file coaching message).
+async function runLint(filesToLint, getLintConfig, { logsDir = null, apply = false, mode = 'inline' } = {}) {
   const { plugins: pluginNames, resolveDir, sourceDir } = getLintConfig();
   // Files (and ESLint's cwd) live in the project being linted, when configured;
   // plugins are still resolved from resolveDir (where they're installed).
@@ -289,10 +340,14 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
       try {
         file.code = await readFile(resolve(lintDir, file.path), 'utf-8');
         file.filename = file.filename ?? file.path;
-      } catch (err) {
+      } catch {
         fileResults.push({
           filename: file.filename ?? file.path, messages: [], fixedCode: null, fixed: false, cacheKey: null,
-          error: `Could not read "${file.path}" (relative to ${lintDir}): ${err.message}`,
+          error:
+            `"${file.path}" was not found (looked in ${lintDir}). ` +
+            'This tool reads files; it does not create them. ' +
+            'Make sure whatever process manages your files has persisted this one to disk, then re-run with just the path. ' +
+            'Do not pass the file contents here — dsds_lint_by_path only reads from disk (to lint a string without a file, use dsds_lint_inline).',
         });
         continue;
       }
@@ -317,7 +372,7 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
     if (!file.code) {
       fileResults.push({
         filename, messages: [], fixedCode: null, fixed: false, cacheKey: null,
-        error: 'Provide either `code` (source) or `cacheKey` (from a previous dsds_lint_code call).',
+        error: 'Provide either `code` (source) or `cacheKey` (from a previous dsds_lint_inline call).',
       });
       continue;
     }
@@ -331,7 +386,7 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
       const fixed = fixedCode !== null;
       // Harness mode: write the auto-fixed code back to the file on disk so the
       // lint gate's fixes are applied without the caller re-emitting source.
-      if (args.apply && file.path && fixedCode != null) {
+      if (apply && file.path && fixedCode != null) {
         try { await writeFile(filePath, fixedCode, 'utf-8'); } catch { /* best effort */ }
       }
       const messages = (r?.messages ?? []).map(m => ({
@@ -357,6 +412,7 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
   // Render output
   const lines = [];
   const isBatch = filesToLint.length > 1;
+  const toolName = mode === 'path' ? 'dsds_lint_by_path' : 'dsds_lint_inline';
 
   const totalRemaining = fileResults.reduce((n, f) => n + (f.messages?.length ?? 0), 0);
   const filesFixed = fileResults.filter(f => f.fixed).length;
@@ -468,7 +524,7 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
       `> ⚠️ **${stubFiles.length} stub file${stubFiles.length === 1 ? '' : 's'} detected** — no JSX elements found in: ${stubFiles.map(f => `\`${f}\``).join(', ')}`,
       '>',
       '> Design-system ESLint rules only fire on actual JSX. These files produced no design-system violations because they contain no rendered components.',
-      '> **Call `dsds_lint_code` again after completing your implementation.**',
+      `> **Call \`${toolName}\` again after completing your implementation.**`,
       '',
     );
   }
@@ -482,21 +538,34 @@ export async function lintCodeHandler(args, getLintConfig, logsDir = null) {
   if (totalRemaining === 0 && filesWithErrors === 0) {
     lines.push(
       '',
-      '> ✓ One pass complete — apply the corrected code above and move on. Do NOT call dsds_lint_code again to confirm. ' +
-      'Lint again only if you change a file, and then send only that file (or its `path`/`cacheKey`).',
+      `> ✓ One pass complete — apply the corrected code above and move on. Do NOT call ${toolName} again to confirm. ` +
+      'Lint again only if you change a file.',
     );
   }
 
-  // Cache key hints — only for entries that were freshly linted (have a cacheKey)
-  const freshResults = fileResults.filter(f => f.cacheKey);
-  if (freshResults.length === 1) {
-    lines.push('', `**Cache key:** \`${freshResults[0].cacheKey}\` — pass \`{ cacheKey: "${freshResults[0].cacheKey}", filename: "${freshResults[0].filename}" }\` instead of \`code\` on subsequent calls **only if this file has not changed**. If you modify the file, always pass the updated \`code\` — the cache key is tied to the exact source content linted above.`);
-  } else if (freshResults.length > 1) {
-    lines.push('', '---', '', '**Cache keys** — only valid while these files remain unchanged. If you modify a file, re-send its full `code` instead of the cache key:', '');
-    for (const f of freshResults) {
-      lines.push(`- \`${f.filename}\` → \`${f.cacheKey}\``);
+  // Inline mode is read-only — make the no-persistence contract explicit so a
+  // "clean" result is never mistaken for "the file was saved".
+  if (mode === 'inline') {
+    const chars = filesToLint.reduce((n, f) => n + (typeof f.code === 'string' ? f.code.length : 0), 0);
+    lines.push(
+      '',
+      `> Checked ${chars} character${chars === 1 ? '' : 's'} in memory. No file was read or written — dsds_lint_inline does not persist anything. ` +
+      'To save a file, write it through whatever process manages your project; to lint a file already on disk, use dsds_lint_by_path.',
+    );
+  }
+
+  // Cache-key hints apply only to inline mode (by-path callers re-lint by path).
+  if (mode === 'inline') {
+    const freshResults = fileResults.filter(f => f.cacheKey);
+    if (freshResults.length === 1) {
+      lines.push('', `**Cache key:** \`${freshResults[0].cacheKey}\` — pass \`{ cacheKey: "${freshResults[0].cacheKey}", filename: "${freshResults[0].filename}" }\` instead of \`code\` on subsequent calls **only if this file has not changed**. If you modify the file, always pass the updated \`code\` — the cache key is tied to the exact source content linted above.`);
+    } else if (freshResults.length > 1) {
+      lines.push('', '---', '', '**Cache keys** — only valid while these files remain unchanged. If you modify a file, re-send its full `code` instead of the cache key:', '');
+      for (const f of freshResults) {
+        lines.push(`- \`${f.filename}\` → \`${f.cacheKey}\``);
+      }
+      lines.push('');
     }
-    lines.push('');
   }
 
   return {

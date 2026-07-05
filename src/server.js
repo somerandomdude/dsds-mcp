@@ -24,7 +24,7 @@ import { getEntityDef, getEntityHandler } from './tools/get-entity.js';
 import { searchEntitiesDef, searchEntitiesHandler } from './tools/search-entities.js';
 import { getDocumentBlockDef, getDocumentBlockHandler } from './tools/get-document-block.js';
 import { getAgentContextDef, getAgentContextHandler } from './tools/get-agent-context.js';
-import { lintCodeDef, lintCodeHandler } from './tools/lint-code.js';
+import { lintByPathDef, lintByPathHandler, lintInlineDef, lintInlineHandler } from './tools/lint-code.js';
 import { getChunkDef, getChunkHandler } from './tools/get-chunk.js';
 import { feedbackDef, feedbackHandler } from './tools/feedback.js';
 import { checkExportsDef, checkExportsHandler } from './tools/check-exports.js';
@@ -68,13 +68,13 @@ RESOURCES: Each design system entity is also available as a resource at dsds://e
 
 Note: If DSDS_PATHS is not set, design system tools will return setup instructions. Spec tools always work.
 
-LINT TOOLS — for linting code against configured ESLint plugins (requires LINT_PLUGINS to be configured):
-- dsds_lint_code(files=[{code, filename}]) — lint ALL your generated files in one call (preferred)
-- dsds_lint_code(code, filename?) — lint a single file
-- IMPORTANT: lint every .tsx/.ts file you generate, not just the main component. Pass them all in the \`files\` array at once.
+LINT TOOLS — for linting code against configured ESLint plugins (requires LINT_PLUGINS to be configured). Neither tool saves, creates, or modifies files:
+- dsds_lint_by_path(files=[{path}]) — PREFERRED. Lint files already written to disk, by path. Reads from disk; a missing path errors (it never creates the file). Lint every .tsx/.ts file you wrote in one call.
+- dsds_lint_inline(code, filename?) — lint a source string in memory (read-only, nothing persisted). Use only when the file is not yet on disk; prefer dsds_lint_by_path once it is.
+- Passing source to a lint tool does NOT save it. A "clean" lint result never means a file was written.
 
 EXPORT CHECK — before importing a component, confirm it exists in the package (requires PACKAGE_EXPORT_PATHS):
-- dsds_check_exports(components=["Box", "TextInput"]) — verify each name is actually exported
+- dsds_check_exports(components=["Box", "TextInput"]) — verify each name is actually exported. Read-only: does NOT modify packages or install anything.
 `.trim();
 
 // Appended to the instructions only when the feedback tool is enabled.
@@ -307,7 +307,8 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
     getDependenciesDef,
     getAlternativesDef,
     impactDef,
-    lintCodeDef,
+    lintByPathDef,
+    lintInlineDef,
     checkExportsDef,
     toMarkdownDef,
     ...(enableFeedback ? [feedbackDef] : []),
@@ -345,7 +346,8 @@ export function createServer(getSystems, getSummaries, introEntities = [], getLi
         case 'dsds_get_dependencies':     return getDependenciesHandler(args, getGraph);
         case 'dsds_get_alternatives':     return getAlternativesHandler(args, getGraph);
         case 'dsds_impact':               return impactHandler(args, getGraph);
-        case 'dsds_lint_code':            return lintCodeHandler(args, getLintConfig ?? (() => ({ plugins: [], resolveDir: process.cwd() })), logsDir);
+        case 'dsds_lint_by_path':         return lintByPathHandler(args, getLintConfig ?? (() => ({ plugins: [], resolveDir: process.cwd() })), logsDir);
+        case 'dsds_lint_inline':          return lintInlineHandler(args, getLintConfig ?? (() => ({ plugins: [], resolveDir: process.cwd() })), logsDir);
         case 'dsds_check_exports':        return checkExportsHandler(args, getExportPaths ?? (() => new Map()));
         case 'dsds_to_markdown':          return toMarkdownHandler(args, getSystems);
         case 'dsds_feedback':             return feedbackHandler(args, feedbackDir);

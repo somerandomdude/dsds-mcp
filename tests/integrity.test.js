@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   extractIconImports, parseIconExports, checkIconImports,
   checkKindReferences, checkVersions, readmeVersions,
+  extractExampleCode, extractJsxProps, checkExampleProps,
 } from '../src/integrity.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -60,10 +61,10 @@ describe('checkKindReferences', () => {
 
 describe('checkVersions', () => {
   it('passes when all match the bundled version', () => {
-    expect(checkVersions('0.12.0', [{ label: 'a', version: '0.12.0' }, { label: 'b', version: '0.12.0' }])).toEqual([]);
+    expect(checkVersions('0.13.0', [{ label: 'a', version: '0.13.0' }, { label: 'b', version: '0.13.0' }])).toEqual([]);
   });
   it('flags drift', () => {
-    const errs = checkVersions('0.12.0', [{ label: 'README', version: '0.10.2' }]);
+    const errs = checkVersions('0.13.0', [{ label: 'README', version: '0.10.2' }]);
     expect(errs).toHaveLength(1);
     expect(errs[0]).toContain('0.10.2');
   });
@@ -71,10 +72,56 @@ describe('checkVersions', () => {
 
 describe('readmeVersions', () => {
   it('pulls spec versions from the README patterns', () => {
-    const rm = '**Bundled spec version:** 0.12.0\nDefaults to `0.12.0`.\nhttps://designsystemdocspec.org/v0.12.0/dsds.bundled.schema.json\n"dsdsVersion": "0.12.0"';
+    const rm = '**Bundled spec version:** 0.13.0\nDefaults to `0.13.0`.\nhttps://designsystemdocspec.org/v0.13.0/dsds.bundled.schema.json\n"dsdsVersion": "0.13.0"';
     const vs = readmeVersions(rm);
     expect(vs.length).toBeGreaterThanOrEqual(4);
-    expect(vs.every((v) => v.version === '0.12.0')).toBe(true);
+    expect(vs.every((v) => v.version === '0.13.0')).toBe(true);
+  });
+});
+
+describe('example-vs-API consistency (R4)', () => {
+  const tooltip = {
+    kind: 'component', identifier: 'tooltip', name: 'Tooltip',
+    documentBlocks: [{ kind: 'api', properties: [{ identifier: 'text' }, { identifier: 'placement' }, { identifier: 'disabled' }] }],
+  };
+
+  it('extracts code from fenced blocks and example presentations', () => {
+    const entity = {
+      documentBlocks: [
+        { kind: 'sections', items: [{ body: 'x\n```tsx\n<A b="c"/>\n```' }] },
+        { kind: 'sections', items: [{ examples: [{ presentation: { kind: 'code', code: '<D e={1}/>' } }] }] },
+      ],
+    };
+    const code = extractExampleCode(entity);
+    expect(code.some((c) => c.includes('<A'))).toBe(true);
+    expect(code.some((c) => c.includes('<D'))).toBe(true);
+  });
+
+  it('flags a prop that is not in the api block', () => {
+    const guide = { kind: 'guide', identifier: 'g', documentBlocks: [{ kind: 'sections', items: [{ body: '```tsx\n<Tooltip content="Del"/>\n```' }] }] };
+    const errs = checkExampleProps([tooltip, guide]);
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toContain('content');
+    expect(errs[0]).toContain('tooltip');
+  });
+
+  it('allows api props, shared props, handlers, and aria attributes', () => {
+    const guide = { kind: 'guide', identifier: 'g', documentBlocks: [{ kind: 'sections', items: [{ body: '```tsx\n<Tooltip text={t} placement="top" marginTop={2} aria-label="x" onClick={f}/>\n```' }] }] };
+    expect(checkExampleProps([tooltip, guide])).toHaveLength(0);
+  });
+
+  it('skips intentional wrong examples marked with ✗ and resumes on ✓', () => {
+    const guide = { kind: 'guide', identifier: 'g', documentBlocks: [{ kind: 'sections', items: [{ body: '```tsx\n// ✗ wrong\n<Tooltip content="x"/>\n// ✓ correct\n<Tooltip badprop="y"/>\n```' }] }] };
+    const errs = checkExampleProps([tooltip, guide]);
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toContain('badprop');
+  });
+
+  it('does not misattribute dotted components or spread contents', () => {
+    expect(extractJsxProps('<List.Item trailing={x}/>')).toEqual([{ component: 'List.Item', prop: 'trailing' }]);
+    expect(extractJsxProps('<Box {...{ src, alt }} radius={2}/>')).toEqual([
+      { component: 'Box', prop: 'radius' },
+    ]);
   });
 });
 

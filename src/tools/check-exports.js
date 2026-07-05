@@ -4,7 +4,7 @@ import { join } from 'node:path';
 export const checkExportsDef = {
   name: 'dsds_check_exports',
   description:
-    'Check whether specific components or exports actually exist in a configured package. Use this before importing a component — catches cases where docs describe a component that the package has not yet shipped. Requires PACKAGE_EXPORT_PATHS to be configured.',
+    'Check whether specific components or exports actually exist in a configured package. Use this before importing a component — catches cases where docs describe a component that the package has not yet shipped. Read-only: returns which names exist; does NOT modify packages, install anything, or write files. Requires PACKAGE_EXPORT_PATHS to be configured.',
   inputSchema: {
     type: 'object',
     properties: {

@@ -1,4 +1,5 @@
 import { getUpdateNotice } from '../spec/version.js';
+import { resolvePropValues, isBooleanProp } from '../prop-types.js';
 
 export const getAgentContextDef = {
   name: 'dsds_get_agent_context',
@@ -82,6 +83,37 @@ function renderApi(block, lines) {
   lines.push('');
 }
 
+// Lead with the closed value sets (tone, numeric scales, booleans) as hard
+// constraints. These are the props agents most often get wrong by carrying over
+// values from other libraries (e.g. Button tone="positive", Card padding/radius)
+// — surfacing the exact allowed values up front, not buried in the prop table,
+// is the cheapest way to prevent those build failures.
+function renderConstraints(apiBlock, lines) {
+  if (!apiBlock) return false;
+  const rows = [];
+  for (const prop of apiBlock.properties ?? []) {
+    if (!prop?.identifier) continue;
+    // Spec-authority order: schema.enum → values → type-string parse.
+    const union = resolvePropValues(prop);
+    if (union) {
+      const values = union.map(m => (m.isNumber ? m.value : `"${m.value}"`)).join(' | ');
+      rows.push(`- \`${prop.identifier}\` — exactly one of: ${values}`);
+    } else if (isBooleanProp(prop)) {
+      rows.push(`- \`${prop.identifier}\` — boolean: {true} | {false}`);
+    }
+  }
+  if (rows.length === 0) return false;
+  lines.push(
+    '## Allowed prop values — hard constraints',
+    '',
+    'These props accept a CLOSED set of values. Use EXACTLY one of the listed values; any other value (including ones valid in other libraries) is a build error. String values are quoted, numbers go in braces (e.g. `padding={3}`, `tone="critical"`).',
+    '',
+    ...rows,
+    '',
+  );
+  return true;
+}
+
 function renderBlock(block, lines) {
   switch (block.kind) {
     case 'guidelines': lines.push('## Rules', ''); renderGuidelines(block, lines); break;
@@ -146,6 +178,10 @@ export async function getAgentContextHandler({ identifier, verbose = false }, ge
   if (found.description) {
     lines.push(asText(found.description), '');
   }
+
+  // Lead with the closed value sets (tone/scale/boolean) — the constraints
+  // agents most often violate. Derived from the same api block rendered below.
+  renderConstraints(docBlocks.find(b => b.kind === 'api'), lines);
 
   // Blast radius up front: what this entity needs (dependencies) and what would
   // break if you change it (dependents). Derived from the relationship graph.

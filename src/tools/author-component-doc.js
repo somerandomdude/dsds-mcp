@@ -278,7 +278,7 @@ function handleSelectBlocks(data) {
 
   const nav = advance(nextData);
   return respond({
-    validated: ordered.length ? `Selected blocks: ${ordered.join(', ')}.` : 'No blocks selected — the component will have an empty documentBlocks array.',
+    validated: ordered.length ? `Selected blocks: ${ordered.join(', ')}.` : 'No blocks selected — documentBlocks will be omitted (0.13.0 forbids empty arrays).',
     nextStep: nav.nextStep,
     nextStepId: nav.nextStepId,
     fields: nav.fields,
@@ -497,7 +497,8 @@ export function assembleComponent(data) {
     name: data.name,
     ...(data.description != null ? { description: data.description } : {}),
     ...(Object.keys(metadata).length ? { metadata } : {}),
-    documentBlocks,
+    // 0.13.0: empty collections violate minItems — omit rather than emit [].
+    ...(documentBlocks.length ? { documentBlocks } : {}),
   };
 
   return {

@@ -6,6 +6,57 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-04
+
+### Changed — BREAKING
+- **`dsds_lint_code` is removed**, replaced by two tools with disjoint schemas:
+  `dsds_lint_by_path` (reads files on disk; a missing path returns corrective
+  guidance — the tool never creates files) and `dsds_lint_inline` (checks a
+  source string in memory; reports how many characters were checked and that
+  no file was touched). The one-tool-two-modes design let agents infer that a
+  lint call persisted a file; the split makes that inference impossible.
+  Update any client or harness that invoked `dsds_lint_code` by name.
+- **Bundled DSDS spec updated 0.12.0 → 0.13.0.** Spec knowledge, scaffolds, and
+  the authoring wizard follow the new rules: chunks accept `documentBlocks` /
+  `agentDocumentBlocks` (top-level `guidelines`/`useCases` are deprecated
+  shorthand), the `checklist` block kind is available everywhere, `governance`
+  and `docOrigin` metadata are documented, and empty arrays/objects are no
+  longer emitted (0.13.0 forbids empty collections).
+
+### Added
+- `dsds_context_brief(useCase="ask")` and the `ask-design-system` prompt — a
+  retrieval-and-answer briefing for answering design-system questions with
+  grounded, cited answers.
+- `dsds_get_agent_context` now leads with an **Allowed prop values** section:
+  every closed value set (tones, numeric scales, booleans) rendered as hard
+  constraints before the prose.
+- Spec-authority prop-value resolution shared by the wizard and agent context:
+  `schema.enum` → `values` → `type`-string parse (per 0.13.0, `schema` is
+  authoritative). Systems documented with portable `values` arrays — no
+  TS-style type strings — get full enum options and constraints.
+- Responsive-wrapper generalization: any wrapper named like `Responsive<…>` /
+  `ResponsiveValue<…>` is unwrapped when parsing literal unions; container
+  types (`Array<…>`) are never unwrapped.
+- Build brief: a required pre-emission `dsds_check_exports` gate (verify every
+  import name in one call) and a lint-first validate-and-repair loop.
+- Integrity guard: example-vs-API consistency check — every prop used in
+  example code must be a real prop of the documented component; intentional
+  ✗ counter-examples are skipped. Catches docs that teach build errors.
+- Negative-space tool descriptions: lint tools, `dsds_build_component`, and
+  `dsds_check_exports` now state what they do NOT do (save, create, install).
+
+### Fixed
+- `dsds_build_component` emits type-valid JSX: numeric union values are braced
+  (`contentSize={3}`, never `"3"`), plain-text values for ReactNode props are
+  quoted, enum answers are validated against the component's real value set
+  (invalid values are rejected with the allowed list), and empty
+  `documentBlocks` arrays are omitted.
+- `isBooleanType` now recognises `boolean | undefined` (the space between
+  `|` and `undefined` defeated the old single-pass strip).
+- Lint plugins resolve from `LINT_RESOLVE_DIR` via documented strategies,
+  including a standalone plugin package self-reference (`exports` field).
+
+
 ## [0.1.1] - 2026-06-29
 
 ### Changed

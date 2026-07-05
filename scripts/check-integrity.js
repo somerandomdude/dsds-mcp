@@ -4,6 +4,7 @@
  * agent is broken:
  *   - an icon import (from the configured ICON_PACKAGE) that is not a real export
  *   - a brief directing agents to an entity kind that returns nothing
+ *   - example code using a prop that is not in the component's api block
  *   - a spec-version string that has drifted from the bundled version
  *
  * Run it with the same env the MCP uses (DSDS_PATHS, ICON_PACKAGE, PACKAGE_EXPORT_PATHS):
@@ -23,7 +24,7 @@ import { loadSystems } from '../src/loader.js';
 import { BUNDLED_VERSION } from '../src/spec/version.js';
 import { BUILD_BRIEF } from '../src/briefs.js';
 import {
-  checkIconImports, checkKindReferences, checkVersions, parseIconExports, readmeVersions,
+  checkExampleProps, checkIconImports, checkKindReferences, checkVersions, parseIconExports, readmeVersions,
 } from '../src/integrity.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -33,13 +34,14 @@ const cfg = loadConfig();
 
 // ── Load entities (chunks + which kinds are populated) ───────────────────────
 let chunks = [];
+let allEntities = [];
 const kindsWithEntities = new Set();
 if (cfg.paths.length) {
   const { systems, errors: loadErrors } = await loadSystems(cfg.paths);
   for (const e of loadErrors ?? []) warnings.push(`Load error: ${e.path} — ${e.error}`);
-  const entities = systems.flatMap((s) => s.entities);
-  for (const e of entities) if (e.kind) kindsWithEntities.add(e.kind);
-  chunks = entities.filter((e) => e.kind === 'chunk' && e.code?.code).map((e) => ({ identifier: e.identifier, code: e.code.code }));
+  allEntities = systems.flatMap((s) => s.entities);
+  for (const e of allEntities) if (e.kind) kindsWithEntities.add(e.kind);
+  chunks = allEntities.filter((e) => e.kind === 'chunk' && e.code?.code).map((e) => ({ identifier: e.identifier, code: e.code.code }));
 } else {
   warnings.push('DSDS_PATHS not set — skipping icon-import and kind-reference checks.');
 }
@@ -66,6 +68,11 @@ if (chunks.length) {
 // ── R2: no build-brief directive points at an empty kind ─────────────────────
 if (cfg.paths.length) {
   errors.push(...checkKindReferences(BUILD_BRIEF, kindsWithEntities));
+}
+
+// ── R4: example code uses only real props of documented components ───────────
+if (allEntities.length) {
+  errors.push(...checkExampleProps(allEntities));
 }
 
 // ── R3: one spec version across version.js, config, README, DSDS files ───────

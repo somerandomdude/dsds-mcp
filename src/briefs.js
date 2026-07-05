@@ -94,17 +94,38 @@ If a chunk matches, call \`dsds_get_chunk(identifier)\` to retrieve the full cod
 
 ---
 
+### Step 7 — Verify every import before you write it (required)
+
+If \`dsds_check_exports\` is available, make ONE call with **every** component and icon
+name you intend to import — across all packages — in a single \`components\` array,
+BEFORE emitting any code. This is not optional: it is the one cheap check that
+catches the most common build-breakers.
+
+- It catches hallucinated names before they become \`TS2305\`/\`TS2724\` errors —
+  e.g. \`ThemeProvider\`, \`RootTheme\`, or \`createTheme\` imported from the design
+  system package when they are not exported, or \`SettingsIcon\` instead of \`CogIcon\`.
+- Include every icon name; icons are the top hallucination risk.
+- One call covers all configured packages — there is no \`package\` argument.
+- Do NOT import a name the check reports as missing. Find the real export (search
+  the docs) or drop it.
+
+Note: this verifies export **names**, not package **versions**. Write the
+dependency versions exactly as instructed — do not invent a package or a version
+range (e.g. a non-existent \`@sanity/ui@^4.0.0\`).
+
+---
+
 Only after completing these steps should you write code.
 
 ---
 
-### Step 7 — Validate and repair before you finish (required)
+### Step 8 — Validate and repair before you finish (required)
 
 Writing the code is not the end. Before you consider the work done, run an
 ordered, repeating check and fix what it finds — do not skip a stage and do not
 stop at the first green light:
 
-1. **Lint.** Call \`dsds_lint_code\` with every file you wrote (use the \`files\` array). Apply the corrected code it returns, then resolve any remaining violations it reports. Lint is not optional or advisory — design-system rules only fire on real JSX, so lint your final component code, not a stub.
+1. **Lint.** Call \`dsds_lint_by_path\` with every file you wrote (use the \`files\` array of \`{ path }\`). Apply the corrected code it returns, then resolve any remaining violations it reports. (If a file is not yet on disk, use \`dsds_lint_inline\` with its source — but neither tool saves files; a clean result never means a file was written.) Lint is not optional or advisory — design-system rules only fire on real JSX, so lint your final component code, not a stub.
 2. **Build / render.** Make sure the app actually mounts and renders without console or runtime errors. A file that type-checks but throws on render has not passed.
 3. **Accessibility.** Resolve accessibility issues (labels, landmarks, alt text, ARIA, and color contrast) so the rendered UI is usable by assistive technology.
 
